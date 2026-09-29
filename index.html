@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oumy's Farm — Marché Frais & Packs d'Approvisionnement Dakar</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'oumy-green': '#0f766e',
+                        'oumy-green-dark': '#0d5c56',
+                        'oumy-chili': '#dc2626',
+                        'oumy-gold': '#f59e0b',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="h-full flex flex-col text-slate-800 bg-slate-50 antialiased selection:bg-oumy-green selection:text-white">
+
+    <!-- Top Header Navigation -->
+    <header class="sticky top-0 z-40 bg-oumy-green text-white shadow-md border-b border-teal-800/30">
+        <div class="max-w-5xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-2.5 cursor-pointer" onclick="filterCategory('all')">
+                <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-400 text-teal-950 flex items-center justify-center font-black text-lg shadow-sm shrink-0">
+                    <i class="fa-solid fa-store text-oumy-green-dark"></i>
+                </div>
+                <div>
+                    <h1 class="font-black text-sm sm:text-base tracking-tight text-white leading-none">Oumy's Farm</h1>
+                    <p class="text-[10px] text-teal-100 font-medium mt-0.5">Marché Frais, Produits Halieutiques & Packs Dakar</p>
+                </div>
+            </div>
+
+            <!-- Header Actions -->
+            <div class="flex items-center gap-2">
+                <!-- Admin Button -->
+                <button type="button" onclick="openAdminModal()" class="px-2.5 py-1.5 sm:px-3 bg-teal-800/80 hover:bg-teal-700 text-amber-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-teal-600/40">
+                    <i class="fa-solid fa-user-shield"></i>
+                    <span class="hidden sm:inline">Espace Admin</span>
+                </button>
+
+                <!-- Cart Button -->
+                <button type="button" onclick="toggleCartDrawer()" class="relative px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition-transform active:scale-95 flex items-center gap-1.5 shadow-md">
+                    <i class="fa-solid fa-basket-shopping text-teal-900"></i>
+                    <span>Panier</span>
+                    <span id="cartBadge" class="bg-oumy-chili text-white font-extrabold text-[10px] w-5 h-5 rounded-full flex items-center justify-center ml-0.5 shadow-xs">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 space-y-4">
+
+        <!-- Hero Promo Banner -->
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-900 via-oumy-green to-teal-800 text-white p-4 sm:p-6 shadow-lg border border-teal-700/40">
+            <div class="relative z-10 max-w-xl space-y-2">
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider">
+                    <i class="fa-solid fa-truck-fast"></i> Livraisons Dakar & Banlieue
+                </span>
+                <h2 class="text-lg sm:text-2xl font-black leading-snug">
+                    Faites toutes vos courses fraîches en 1 clic ! 🇸🇳
+                </h2>
+                <p class="text-xs sm:text-sm text-teal-100 font-medium leading-relaxed">
+                    Légumes du jardin, Poissons & Produits halieutiques, Volailles fraîches, Œufs et Packs familiaux d'approvisionnement.
+                </p>
+            </div>
+            <div class="absolute -right-6 -bottom-8 opacity-15 pointer-events-none text-9xl font-black text-amber-300">
+                <i class="fa-solid fa-fish-fins"></i>
+            </div>
+        </div>
+
+        <!-- Search Bar & Rayon Filters -->
+        <div class="space-y-3">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Rechercher oignons, poulet, thiof, alvéole d'œufs, pack familial..." class="w-full text-xs pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white shadow-xs focus:border-oumy-green focus:ring-2 focus:ring-oumy-green/20 outline-none transition-all">
+            </div>
+
+            <!-- Filter Buttons Horizontal Scroll (Dynamic Rayons) -->
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar text-xs">
+                <button type="button" onclick="filterCategory('all')" id="filter-all" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-oumy-green text-white shadow-xs transition-all">
+                    🛍️ Tous les rayons
+                </button>
+                <button type="button" onclick="filterCategory('packs')" id="filter-packs" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                    📦 Packs Familiaux & Éco
+                </button>
+                <button type="button" onclick="filterCategory('legumes')" id="filter-legumes" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                    🥬 Légumes & Féculents
+                </button>
+                <button type="button" onclick="filterCategory('halieutique')" id="filter-halieutique" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                    🐟 Produits Halieutiques
+                </button>
+                <button type="button" onclick="filterCategory('volaille')" id="filter-volaille" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                    🍗 Poulet & Volailles
+                </button>
+                <button type="button" onclick="filterCategory('oeufs')" id="filter-oeufs" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                    🥚 Œufs & Produits Frais
+                </button>
+                <button type="button" onclick="filterCategory('bio')" id="filter-bio" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                    ✨ 100% BIO
+                </button>
+            </div>
+        </div>
+
+        <!-- Product Grid -->
+        <div id="productsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+            <!-- Dynamic products rendered here -->
+        </div>
+
+    </main>
+
+    <!-- Cart Drawer (Side Slide-over) -->
+    <div id="cartDrawer" class="fixed inset-0 z-50 overflow-hidden hidden">
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity" onclick="toggleCartDrawer()"></div>
+        <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div class="w-screen max-w-md bg-white shadow-2xl flex flex-col">
+                <!-- Drawer Header -->
+                <div class="p-4 bg-oumy-green text-white flex items-center justify-between shrink-0">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-basket-shopping text-amber-300 text-lg"></i>
+                        <h3 class="font-extrabold text-sm sm:text-base">Mon Panier d'Achat</h3>
+                    </div>
+                    <button type="button" onclick="toggleCartDrawer()" class="text-teal-100 hover:text-white p-1">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Cart Items List -->
+                <div id="cartItemsList" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar divide-y divide-slate-100">
+                    <!-- Dynamic cart items -->
+                </div>
+
+                <!-- Cart Footer -->
+                <div class="p-4 border-t border-slate-200 bg-slate-50 space-y-3 shrink-0">
+                    <div class="flex items-center justify-between text-sm font-extrabold text-slate-900">
+                        <span>Sous-total articles :</span>
+                        <span id="cartSubtotal" class="text-oumy-green text-base">0 FCFA</span>
+                    </div>
+
+                    <button type="button" onclick="openCheckoutModal()" id="btnCheckout" class="w-full py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-98">
+                        <span>Commander via WhatsApp</span>
+                        <i class="fa-brands fa-whatsapp text-lg text-emerald-950"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Checkout & Delivery Zone Modal -->
+    <div id="checkoutModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/70 backdrop-blur-xs hidden">
+        <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="p-4 bg-oumy-green text-white flex items-center justify-between shrink-0">
+                <h3 class="font-extrabold text-sm sm:text-base flex items-center gap-2">
+                    <i class="fa-solid fa-truck-ramp-box text-amber-300"></i> Valider ma Commande
+                </h3>
+                <button type="button" onclick="closeCheckoutModal()" class="text-white hover:text-amber-200 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleCheckoutSubmit(event)" class="p-4 flex-1 overflow-y-auto space-y-3 custom-scrollbar text-xs">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Votre Nom complet : *</label>
+                    <input type="text" id="custName" required placeholder="Ex: Aminata Diallo" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none focus:border-oumy-green">
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Téléphone Joignable (WhatsApp) : *</label>
+                    <input type="tel" id="custPhone" required placeholder="Ex: 77 000 00 00" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none focus:border-oumy-green">
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Adresse exacte de livraison : *</label>
+                    <input type="text" id="custAddress" required placeholder="Ex: Mermoz Pyrotechnie, Villa 124 près de la mosquée" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none focus:border-oumy-green">
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Zone de livraison / Quartier : *</label>
+                    <select id="deliveryZoneSelect" onchange="updateDeliveryFeeCalc()" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none focus:border-oumy-green font-semibold text-slate-800">
+                        <option value="z1">Zone 1 : Plateau, Fann, Point E, Mermoz, Ouakam (+1 500 FCFA)</option>
+                        <option value="z2">Zone 2 : Almadies, Ngor, Yoff, Mamelles, Liberte (+2 000 FCFA)</option>
+                        <option value="z3">Zone 3 : Banlieue (Pikine, Guédiawaye, Keur Massar, Rufisque) (+2 500 FCFA)</option>
+                        <option value="pickup">Retrait sur place chez Oumy (Gratuit)</option>
+                    </select>
+                </div>
+
+                <!-- Price Summary Box -->
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 text-xs">
+                    <div class="flex justify-between text-slate-600">
+                        <span>Produits :</span>
+                        <span id="summarySubtotal" class="font-bold">0 FCFA</span>
+                    </div>
+                    <div class="flex justify-between text-slate-600">
+                        <span>Frais de livraison :</span>
+                        <span id="summaryDeliveryFee" class="font-bold text-amber-700">+1 500 FCFA</span>
+                    </div>
+                    <div class="flex justify-between text-slate-900 font-extrabold text-sm pt-1 border-t border-slate-200">
+                        <span>TOTAL À PAYER :</span>
+                        <span id="summaryGrandTotal" class="text-oumy-green">0 FCFA</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full py-3 bg-oumy-green hover:bg-teal-800 text-white font-black rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-transform active:scale-98">
+                    <i class="fa-brands fa-whatsapp text-lg text-amber-300"></i> Envoyer la commande sur WhatsApp
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard Modal -->
+    <div id="adminModal" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs hidden">
+        <div class="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <!-- Header -->
+            <div class="p-3.5 sm:p-4 bg-oumy-green text-white flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-user-shield"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-xs sm:text-sm">Espace Administration — Oumy's Farm</h3>
+                        <p class="text-[10px] text-teal-100">Gestion des prix, rayons, stocks, packs et commandes</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeAdminModal()" class="text-white hover:text-amber-200 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- PIN Screen -->
+            <div id="adminPinScreen" class="p-6 text-center space-y-4 my-auto">
+                <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto text-xl">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <div class="space-y-1">
+                    <h4 class="font-extrabold text-sm text-slate-900">Accès Réservé à la Gérante</h4>
+                    <p class="text-xs text-slate-500">Saisissez votre mot de passe administrateur</p>
+                </div>
+                <div class="max-w-xs mx-auto space-y-2">
+                    <input type="password" id="adminPinInput" placeholder="Mot de passe" class="w-full text-center px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:border-oumy-green">
+                    <button type="button" onclick="verifyAdminPassword()" class="w-full py-2.5 bg-oumy-green hover:bg-teal-800 text-white font-bold text-xs rounded-xl shadow-xs">
+                        Se connecter
+                    </button>
+                </div>
+            </div>
+
+            <!-- Admin Main Dashboard (Hidden by default) -->
+            <div id="adminDashboard" class="flex-1 flex flex-col overflow-hidden hidden">
+                <!-- Navigation Tabs -->
+                <div class="flex items-center border-b border-slate-200 bg-slate-50 px-3 pt-2 gap-2 overflow-x-auto shrink-0 custom-scrollbar text-xs">
+                    <button type="button" onclick="switchAdminTab('products')" id="tab-products" class="admin-tab px-3 py-2 font-bold border-b-2 border-oumy-green text-oumy-green shrink-0">
+                        📦 Catalogue & Rayons
+                    </button>
+                    <button type="button" onclick="switchAdminTab('orders')" id="tab-orders" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
+                        📋 Commandes
+                    </button>
+                    <button type="button" onclick="switchAdminTab('settings')" id="tab-settings" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
+                        ⚙️ Paramètres
+                    </button>
+                    <button type="button" onclick="logoutAdmin()" class="ml-auto text-rose-600 font-bold px-2 py-1 text-[11px] shrink-0">
+                        Déconnexion
+                    </button>
+                </div>
+
+                <!-- Tab Content: Products & Packs -->
+                <div id="adminTabProducts" class="admin-content flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 custom-scrollbar">
+                    
+                    <!-- Form to add new product or pack -->
+                    <div class="bg-teal-50/60 border border-teal-200 p-3.5 rounded-2xl space-y-3">
+                        <h4 class="font-extrabold text-xs text-teal-900 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-plus-circle text-oumy-green"></i> Ajouter un Produit ou un Pack d'Approvisionnement
+                        </h4>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-600">Nom du produit / Pack :</label>
+                                <input type="text" id="newProdName" placeholder="Ex: Thiof Frais, Poulet Chair, Pack 15 Jours..." class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none">
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-600">Rayon / Catégorie :</label>
+                                <select id="newProdCat" class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none font-semibold">
+                                    <option value="packs">📦 Pack d'Approvisionnement</option>
+                                    <option value="legumes">🥬 Légumes & Féculents</option>
+                                    <option value="halieutique">🐟 Produits Halieutiques (Poissons & Fruits de mer)</option>
+                                    <option value="volaille">🍗 Poulet & Volailles</option>
+                                    <option value="oeufs">🥚 Œufs & Produit Frais</option>
+                                    <option value="bio">✨ Produit 100% BIO</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-600">Prix (FCFA) :</label>
+                                <input type="number" id="newProdPrice" placeholder="Ex: 3500" class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none">
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-600">Unité / Format :</label>
+                                <input type="text" id="newProdUnit" placeholder="Ex: kg, poulet entier, alvéole de 30, le pack" class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none">
+                            </div>
+
+                            <div class="sm:col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-600">Composition du pack (si catégorie Pack) :</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="newProdComposition" placeholder="Ex: 10kg Oignons, 10kg Pommes de terre..." class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none flex-1">
+                                    <button type="button" onclick="openPackComposerModal('NEW')" class="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shrink-0 flex items-center gap-1 shadow-2xs">
+                                        <i class="fa-solid fa-list-check"></i> 🛒 Choisir légumes
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" onclick="addNewProduct()" class="w-full py-2 bg-oumy-green hover:bg-teal-800 text-white font-extrabold text-xs rounded-xl shadow-xs transition-transform active:scale-98">
+                            + Enregistrer le produit / Pack dans le catalogue
+                        </button>
+                    </div>
+
+                    <!-- Products Admin List -->
+                    <div id="adminProductsList" class="space-y-3">
+                        <!-- Dynamic items -->
+                    </div>
+                </div>
+
+                <!-- Tab Content: Orders -->
+                <div id="adminTabOrders" class="admin-content flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 custom-scrollbar hidden">
+                    <div class="flex items-center justify-between">
+                        <h4 class="font-bold text-xs text-slate-800">Historique des Commandes</h4>
+                        <button type="button" onclick="exportOrdersToCSV()" class="px-2.5 py-1 bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-file-excel"></i> Exporter en CSV
+                        </button>
+                    </div>
+                    <div id="adminOrdersList" class="space-y-2 text-xs">
+                        <!-- Dynamic orders -->
+                    </div>
+                </div>
+
+                <!-- Tab Content: Settings -->
+                <div id="adminTabSettings" class="admin-content flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar hidden text-xs">
+                    <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                        <h5 class="font-bold text-slate-900">Numéro WhatsApp Réceptionnaire :</h5>
+                        <input type="text" id="settingPhone" placeholder="221770000000" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none font-mono">
+                        <button type="button" onclick="saveSettingsPhone()" class="px-3 py-1.5 bg-oumy-green text-white font-bold rounded-xl">Enregistrer le numéro</button>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                        <h5 class="font-bold text-slate-900">Changer le Mot de passe Admin :</h5>
+                        <p class="text-[10px] text-slate-500">Min. 8 caractères avec au moins 1 chiffre et 1 caractère spécial (!@#$%)</p>
+                        <input type="password" id="settingNewPass" placeholder="Nouveau mot de passe" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none">
+                        <button type="button" onclick="saveNewAdminPassword()" class="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold rounded-xl">Modifier le mot de passe</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PACK COMPOSER MODAL (z-[100] High Priority Overlay) -->
+    <div id="packComposerModal" class="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs hidden">
+        <div class="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-emerald-100">
+            <!-- Header -->
+            <div class="p-3.5 bg-oumy-green text-white flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-amber-300 text-slate-950 flex items-center justify-center text-sm font-bold">
+                        <i class="fa-solid fa-carrot text-oumy-chili"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-xs sm:text-sm">Sélectionner & Doser les Articles du Pack</h4>
+                        <p class="text-[10px] text-teal-100">Cochez les produits et ajustez la quantité (kg / unités)</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closePackComposerModal()" class="text-white hover:text-amber-200 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Grid list of vegetable items -->
+            <div id="composerItemsGrid" class="p-3 sm:p-4 flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2.5 custom-scrollbar bg-slate-50">
+                <!-- JS Dynamic Render -->
+            </div>
+
+            <!-- Preview & Save Bar -->
+            <div class="p-3 sm:p-4 border-t border-slate-200 bg-white space-y-2 shrink-0">
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs text-slate-800">
+                    <span class="font-extrabold text-amber-900 block text-[10px] uppercase tracking-wider mb-0.5">Aperçu de la composition :</span>
+                    <p id="composerPreviewText" class="font-medium text-slate-700 italic">Aucun élément sélectionné...</p>
+                </div>
+
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" onclick="closePackComposerModal()" class="px-3.5 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">
+                        Annuler
+                    </button>
+                    <button type="button" onclick="applyComposerToPack()" class="px-4 py-2 bg-oumy-green hover:bg-teal-800 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-transform active:scale-95">
+                        <i class="fa-solid fa-check text-amber-300"></i> Valider cette composition
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 z-[110] transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-slate-700">
+        <i class="fa-solid fa-circle-check text-amber-400"></i>
+        <span id="toastMsg">Notification</span>
+    </div>
+
+    <!-- Application Logic Script -->
+    <script>
+        // --- CONSTANTS & DEFAULT CATALOG DATA ---
+        const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80";
+
+        const DEFAULT_PRODUCTS = [
+            {
+                id: "pack-big-size",
+                name: "Pack Big Size Familial (15 Jours / 1 Mois)",
+                category: "packs",
+                price: 25000,
+                unit: "le pack complet",
+                badge: "Grand Foyer",
+                image: "https://images.unsplash.com/photo-1595855759920-86582396756a?auto=format&fit=crop&w=600&q=80",
+                composition: "10kg Oignons, 10kg Pommes de terre, 3kg Carottes, 2kg Navets, 2kg Chou, 2kg Manioc, 1kg Ail, Piments",
+                inStock: true
+            },
+            {
+                id: "pack-eco-15j",
+                name: "Pack Éco Approvisionnement (15 Jours)",
+                category: "packs",
+                price: 15000,
+                unit: "le pack éco",
+                badge: "Populaire",
+                image: "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=600&q=80",
+                composition: "5kg Oignons, 5kg Pommes de terre, 2kg Carottes, 1kg Navet, 1kg Chou, Ail & Piments",
+                inStock: true
+            },
+            {
+                id: "oignons-locaux",
+                name: "Oignons Locaux Frais",
+                category: "legumes",
+                price: 500,
+                unit: "kg",
+                badge: "Frais",
+                image: "https://images.unsplash.com/photo-1618512496248-a07fe83aa8cf?auto=format&fit=crop&w=600&q=80",
+                composition: "",
+                inStock: true
+            },
+            {
+                id: "pommes-de-terre",
+                name: "Pommes de terre",
+                category: "legumes",
+                price: 600,
+                unit: "kg",
+                badge: "Qualité Sup",
+                image: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=600&q=80",
+                composition: "",
+                inStock: true
+            },
+            {
+                id: "thiof-frais",
+                name: "Thiof Frais du Jour (Mérou)",
+                category: "halieutique",
+                price: 4500,
+                unit: "kg",
+                badge: "Halieutique",
+                image: "https://images.unsplash.com/photo-1534939561126-855b8675edd7?auto=format&fit=crop&w=600&q=80",
+                composition: "",
+                inStock: true
+            },
+            {
+                id: "poulet-fermier",
+                name: "Poulet Chair Fermier Nettoyé",
+                category: "volaille",
+                price: 3500,
+                unit: "poulet (1.5kg)",
+                badge: "Volaille Fraîche",
+                image: "https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=600&q=80",
+                composition: "",
+                inStock: true
+            },
+            {
+                id: "alveole-oeufs",
+                name: "Alvéole de 30 Œufs Frais",
+                category: "oeufs",
+                price: 2600,
+                unit: "alvéole (30 œufs)",
+                badge: "Œufs Frais",
+                image: "https://images.unsplash.com/photo-1506976785307-8732e854ad03?auto=format&fit=crop&w=600&q=80",
+                composition: "",
+                inStock: true
+            },
+            {
+                id: "carottes-bio",
+                name: "Carottes Bio Sucrées",
+                category: "bio",
+                price: 800,
+                unit: "kg",
+                badge: "100% BIO",
+                image: "https://images.unsplash.com/photo-1598170845058-12ef4a457939?auto=format&fit=crop&w=600&q=80",
+                composition: "",
+                inStock: true
+            }
+        ];
+
+        // --- GLOBAL STATE ---
+        let productsList = [];
+        let cartItems = [];
+        let ordersHistory = [];
+        let currentCategoryFilter = 'all';
+        let currentComposerTargetId = null;
+        let composerSelections = {};
+
+        let oumyPhone = localStorage.getItem('oumy_phone') || '221770000000';
+        let adminPassword = localStorage.getItem('oumy_admin_pass') || 'Oumy2026!';
+        let isAdminLoggedIn = false;
+
+        // --- INIT ON LOAD ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadLocalState();
+            renderProducts();
+            updateCartUI();
+        });
+
+        function loadLocalState() {
+            const savedProds = localStorage.getItem('oumy_products');
+            if (savedProds) {
+                try { productsList = JSON.parse(savedProds); } catch (e) { productsList = DEFAULT_PRODUCTS; }
+            } else {
+                productsList = DEFAULT_PRODUCTS;
+            }
+
+            const savedOrders = localStorage.getItem('oumy_orders');
+            if (savedOrders) {
+                try { ordersHistory = JSON.parse(savedOrders); } catch (e) { ordersHistory = []; }
+            }
+        }
+
+        function saveLocalProducts() {
+            localStorage.setItem('oumy_products', JSON.stringify(productsList));
+        }
+
+        // --- RENDER STOREFRONT PRODUCTS ---
+        function renderProducts() {
+            const grid = document.getElementById('productsGrid');
+            if (!grid) return;
+
+            const searchVal = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+
+            const filtered = productsList.filter(p => {
+                const matchCat = (currentCategoryFilter === 'all') || (p.category === currentCategoryFilter) || (currentCategoryFilter === 'bio' && p.badge === '100% BIO');
+                const matchSearch = p.name.toLowerCase().includes(searchVal) || (p.composition && p.composition.toLowerCase().includes(searchVal));
+
+                return matchCat && matchSearch;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-12 text-center text-slate-400 space-y-2">
+                        <i class="fa-solid fa-basket-shopping text-3xl"></i>
+                        <p class="text-xs font-bold">Aucun produit trouvé dans ce rayon...</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(p => {
+                const isPack = p.category === 'packs';
+                const isOutOfStock = p.inStock === false;
+
+                return `
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <!-- Image Container -->
+                        <div class="relative aspect-4/3 overflow-hidden bg-slate-100">
+                            <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-full h-full object-cover transition-transform duration-300 hover:scale-105">
+                            
+                            <!-- Badges -->
+                            <div class="absolute top-2 left-2 flex flex-col gap-1">
+                                ${p.badge ? `<span class="bg-amber-400 text-slate-950 text-[9px] font-black uppercase px-2 py-0.5 rounded-md shadow-xs">${p.badge}</span>` : ''}
+                                ${isPack ? `<span class="bg-oumy-green text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-md shadow-xs">Pack d'Approvisionnement</span>` : ''}
+                            </div>
+
+                            ${isOutOfStock ? `
+                            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-2xs flex items-center justify-center">
+                                <span class="bg-rose-600 text-white font-black text-xs px-3 py-1.5 rounded-xl shadow-lg uppercase tracking-wider">
+                                    🔴 Épuisé
+                                </span>
+                            </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Card Info -->
+                        <div class="p-3.5 space-y-2">
+                            <div>
+                                <h3 class="font-extrabold text-xs sm:text-sm text-slate-900 leading-snug line-clamp-2">${p.name}</h3>
+                                <p class="text-xs font-black text-oumy-green mt-0.5">${p.price.toLocaleString()} FCFA <span class="text-[10px] text-slate-500 font-normal">/ ${p.unit || 'unité'}</span></p>
+                            </div>
+
+                            ${p.composition ? `
+                            <div class="bg-amber-50/80 border border-amber-200/60 rounded-xl p-2 text-[11px] space-y-1">
+                                <span class="font-bold text-amber-900 text-[10px] uppercase tracking-wider block">Composition du pack :</span>
+                                <p class="text-slate-700 font-medium leading-relaxed">${p.composition}</p>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <div class="p-3.5 pt-0">
+                        <button type="button" onclick="addToCart('${p.id}')" ${isOutOfStock ? 'disabled' : ''} class="w-full py-2 px-3 ${isOutOfStock ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-oumy-green hover:bg-teal-800 text-white active:scale-98'} font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-cart-plus text-amber-300"></i>
+                            <span>${isOutOfStock ? 'Rupture de Stock' : 'Ajouter au Panier'}</span>
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function filterCategory(cat) {
+            currentCategoryFilter = cat;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-oumy-green', 'text-white');
+                btn.classList.add('bg-white', 'text-slate-700');
+            });
+            const activeBtn = document.getElementById(`filter-${cat}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-white', 'text-slate-700');
+                activeBtn.classList.add('bg-oumy-green', 'text-white');
+            }
+            renderProducts();
+        }
+
+        function handleSearch() {
+            renderProducts();
+        }
+
+        // --- CART LOGIC ---
+        function addToCart(productId) {
+            const item = productsList.find(p => p.id === productId);
+            if (!item || item.inStock === false) return;
+
+            const existing = cartItems.find(c => c.id === productId);
+            if (existing) {
+                existing.qty += 1;
+            } else {
+                cartItems.push({ ...item, qty: 1 });
+            }
+
+            updateCartUI();
+            showToast(`"${item.name}" ajouté au panier !`);
+        }
+
+        function updateCartQty(productId, delta) {
+            const item = cartItems.find(c => c.id === productId);
+            if (!item) return;
+
+            item.qty += delta;
+            if (item.qty <= 0) {
+                cartItems = cartItems.filter(c => c.id !== productId);
+            }
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const badge = document.getElementById('cartBadge');
+            const list = document.getElementById('cartItemsList');
+            const subtotalEl = document.getElementById('cartSubtotal');
+
+            const totalQty = cartItems.reduce((acc, c) => acc + c.qty, 0);
+            const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
+
+            if (badge) badge.textContent = totalQty;
+            if (subtotalEl) subtotalEl.textContent = `${subtotal.toLocaleString()} FCFA`;
+
+            if (!list) return;
+
+            if (cartItems.length === 0) {
+                list.innerHTML = `
+                    <div class="py-12 text-center text-slate-400 space-y-2">
+                        <i class="fa-solid fa-basket-shopping text-4xl text-slate-300"></i>
+                        <p class="text-xs font-bold">Votre panier est vide</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = cartItems.map(c => `
+                <div class="py-2.5 flex items-center justify-between gap-2 text-xs">
+                    <div class="min-w-0 flex-1">
+                        <h4 class="font-bold text-slate-900 truncate">${c.name}</h4>
+                        <span class="text-[10px] text-slate-500 font-medium">${c.price.toLocaleString()} FCFA / ${c.unit || 'unité'}</span>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                        <div class="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
+                            <button type="button" onclick="updateCartQty('${c.id}', -1)" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">-</button>
+                            <span class="px-2 font-extrabold text-slate-900 text-xs">${c.qty}</span>
+                            <button type="button" onclick="updateCartQty('${c.id}', 1)" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">+</button>
+                        </div>
+                        <span class="font-extrabold text-oumy-green text-xs w-16 text-right">${(c.price * c.qty).toLocaleString()} FCFA</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleCartDrawer() {
+            const drawer = document.getElementById('cartDrawer');
+            if (drawer) drawer.classList.toggle('hidden');
+        }
+
+        // --- CHECKOUT & DELIVERY LOGIC ---
+        function openCheckoutModal() {
+            if (cartItems.length === 0) {
+                showToast("Votre panier est vide.");
+                return;
+            }
+            toggleCartDrawer();
+            updateDeliveryFeeCalc();
+            const modal = document.getElementById('checkoutModal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeCheckoutModal() {
+            const modal = document.getElementById('checkoutModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function updateDeliveryFeeCalc() {
+            const zoneSelect = document.getElementById('deliveryZoneSelect');
+            const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
+
+            let fee = 1500;
+            if (zoneSelect.value === 'z2') fee = 2000;
+            if (zoneSelect.value === 'z3') fee = 2500;
+            if (zoneSelect.value === 'pickup') fee = 0;
+
+            document.getElementById('summarySubtotal').textContent = `${subtotal.toLocaleString()} FCFA`;
+            document.getElementById('summaryDeliveryFee').textContent = fee > 0 ? `+${fee.toLocaleString()} FCFA` : 'Gratuit';
+            document.getElementById('summaryGrandTotal').textContent = `${(subtotal + fee).toLocaleString()} FCFA`;
+        }
+
+        function handleCheckoutSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('custName').value.trim();
+            const phone = document.getElementById('custPhone').value.trim();
+            const address = document.getElementById('custAddress').value.trim();
+            const zoneSelect = document.getElementById('deliveryZoneSelect');
+            const zoneText = zoneSelect.options[zoneSelect.selectedIndex].text;
+
+            const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
+            let fee = 1500;
+            if (zoneSelect.value === 'z2') fee = 2000;
+            if (zoneSelect.value === 'z3') fee = 2500;
+            if (zoneSelect.value === 'pickup') fee = 0;
+
+            const total = subtotal + fee;
+
+            // Construct WhatsApp Message
+            let msg = `*NOUVELLE COMMANDE — OUMY'S FARM* 🇸🇳\n\n`;
+            msg += `👤 *Client :* ${name}\n`;
+            msg += `📞 *Tel :* ${phone}\n`;
+            msg += `📍 *Adresse :* ${address}\n`;
+            msg += `🚚 *Livraison :* ${zoneText}\n\n`;
+            msg += `🛒 *ARTICLES COMMANDÉS :*\n`;
+
+            cartItems.forEach(item => {
+                msg += `- ${item.qty}x ${item.name} (${(item.price * item.qty).toLocaleString()} FCFA)\n`;
+            });
+
+            msg += `\n-------------------------\n`;
+            msg += `💰 *Sous-total :* ${subtotal.toLocaleString()} FCFA\n`;
+            msg += `🚚 *Frais Livraison :* ${fee.toLocaleString()} FCFA\n`;
+            msg += `✅ *TOTAL À PAYER :* ${total.toLocaleString()} FCFA`;
+
+            // Save order locally for admin history
+            const newOrder = {
+                id: 'ORD-' + Date.now(),
+                date: new Date().toLocaleString('fr-FR'),
+                customer: { name, phone, address, zone: zoneText },
+                items: [...cartItems],
+                subtotal, fee, total
+            };
+            ordersHistory.unshift(newOrder);
+            localStorage.setItem('oumy_orders', JSON.stringify(ordersHistory));
+
+            closeCheckoutModal();
+            cartItems = [];
+            updateCartUI();
+
+            // Redirect to WhatsApp
+            const url = `https://wa.me/${oumyPhone}?text=${encodeURIComponent(msg)}`;
+            window.open(url, '_blank');
+        }
+
+        // --- ADMIN DASHBOARD LOGIC ---
+        function openAdminModal() {
+            const modal = document.getElementById('adminModal');
+            if (modal) modal.classList.remove('hidden');
+
+            if (isAdminLoggedIn) {
+                document.getElementById('adminPinScreen').classList.add('hidden');
+                document.getElementById('adminDashboard').classList.remove('hidden');
+                renderAdminProductsTable();
+            } else {
+                document.getElementById('adminPinScreen').classList.remove('hidden');
+                document.getElementById('adminDashboard').classList.add('hidden');
+            }
+        }
+
+        function closeAdminModal() {
+            const modal = document.getElementById('adminModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function verifyAdminPassword() {
+            const input = document.getElementById('adminPinInput').value;
+            if (input === adminPassword) {
+                isAdminLoggedIn = true;
+                document.getElementById('adminPinScreen').classList.add('hidden');
+                document.getElementById('adminDashboard').classList.remove('hidden');
+                renderAdminProductsTable();
+                showToast("Connexion Admin réussie !");
+            } else {
+                showToast("Mot de passe incorrect !");
+            }
+        }
+
+        function logoutAdmin() {
+            isAdminLoggedIn = false;
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('adminPinScreen').classList.remove('hidden');
+            document.getElementById('adminPinInput').value = '';
+        }
+
+        function switchAdminTab(tab) {
+            document.querySelectorAll('.admin-tab').forEach(t => {
+                t.classList.remove('border-oumy-green', 'text-oumy-green');
+                t.classList.add('border-transparent', 'text-slate-500');
+            });
+            document.querySelectorAll('.admin-content').forEach(c => c.classList.add('hidden'));
+
+            document.getElementById(`tab-${tab}`).classList.add('border-oumy-green', 'text-oumy-green');
+            document.getElementById(`tab-${tab}`).classList.remove('border-transparent', 'text-slate-500');
+
+            if (tab === 'products') {
+                document.getElementById('adminTabProducts').classList.remove('hidden');
+                renderAdminProductsTable();
+            } else if (tab === 'orders') {
+                document.getElementById('adminTabOrders').classList.remove('hidden');
+                renderAdminOrders();
+            } else if (tab === 'settings') {
+                document.getElementById('adminTabSettings').classList.remove('hidden');
+                document.getElementById('settingPhone').value = oumyPhone;
+            }
+        }
+
+        // --- RENDER ADMIN PRODUCTS LIST ---
+        function renderAdminProductsTable() {
+            const container = document.getElementById('adminProductsList');
+            if (!container) return;
+
+            container.innerHTML = productsList.map(p => {
+                const isPack = p.category === 'packs';
+
+                return `
+                <div class="bg-white p-3 rounded-xl border border-slate-200 space-y-2 text-xs">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0 flex-1">
+                            <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0">
+                            <div class="min-w-0 flex-1">
+                                <label class="text-[9px] font-bold text-slate-400 block uppercase">Nom du pack / produit :</label>
+                                <input type="text" value="${p.name.replace(/"/g, '&quot;')}" onchange="updateProductName('${p.id}', this.value)" class="w-full text-xs font-extrabold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-oumy-green focus:bg-white" placeholder="Nom du produit ou pack">
+                                <span class="text-[10px] text-slate-500 font-bold uppercase mt-0.5 block">${p.category}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button type="button" onclick="toggleStockStatus('${p.id}')" class="px-2 py-1 text-[10px] font-bold rounded-lg ${p.inStock !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                                ${p.inStock !== false ? '🟢 En Stock' : '🔴 Épuisé'}
+                            </button>
+                            <button type="button" onclick="deleteProduct('${p.id}')" class="text-slate-400 hover:text-rose-600 p-1">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                        <div class="flex items-center gap-1">
+                            <span class="text-[10px] font-bold text-slate-500">Prix :</span>
+                            <input type="number" value="${p.price}" onchange="updateProductPrice('${p.id}', this.value)" class="w-20 px-2 py-1 text-xs font-bold border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
+                            <span class="text-[10px] font-bold text-slate-600">FCFA</span>
+                        </div>
+                    </div>
+
+                    ${isPack ? `
+                    <div class="pt-2 border-t border-slate-100 bg-amber-50/50 p-2 rounded-xl space-y-2">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <label class="text-[10px] font-bold text-amber-900 uppercase">Composition du pack :</label>
+                            <button type="button" onclick="openPackComposerModal('${p.id}')" class="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[10px] rounded-lg flex items-center gap-1 shadow-2xs">
+                                <i class="fa-solid fa-carrot text-teal-900"></i> Choisir & doser les articles
+                            </button>
+                        </div>
+                        <input type="text" value="${p.composition || ''}" placeholder="Ex: 10kg Oignons, 10kg Pommes de terre..." onchange="updateProductComposition('${p.id}', this.value)" class="w-full text-xs px-2 py-1 rounded-lg border border-amber-200 bg-white focus:border-oumy-green outline-none font-medium text-slate-800">
+                    </div>
+                    ` : ''}
+                </div>
+                `;
+            }).join('');
+        }
+
+        function toggleStockStatus(id) {
+            const index = productsList.findIndex(p => p.id === id);
+            if (index > -1) {
+                productsList[index].inStock = !(productsList[index].inStock !== false);
+                saveLocalProducts();
+                renderAdminProductsTable();
+                renderProducts();
+            }
+        }
+
+        function updateProductName(id, newName) {
+            const index = productsList.findIndex(p => p.id === id);
+            if (index > -1 && newName.trim() !== '') {
+                productsList[index].name = newName.trim();
+                saveLocalProducts();
+                renderProducts();
+                showToast("Nom du pack mis à jour !");
+            }
+        }
+
+        function updateProductPrice(id, newPrice) {
+            const index = productsList.findIndex(p => p.id === id);
+            if (index > -1) {
+                productsList[index].price = parseFloat(newPrice) || 0;
+                saveLocalProducts();
+                renderProducts();
+            }
+        }
+
+        function updateProductComposition(id, newComp) {
+            const index = productsList.findIndex(p => p.id === id);
+            if (index > -1) {
+                productsList[index].composition = newComp;
+                saveLocalProducts();
+                renderProducts();
+            }
+        }
+
+        function deleteProduct(id) {
+            if (confirm("Supprimer ce produit du catalogue ?")) {
+                productsList = productsList.filter(p => p.id !== id);
+                saveLocalProducts();
+                renderAdminProductsTable();
+                renderProducts();
+            }
+        }
+
+        function addNewProduct() {
+            const name = document.getElementById('newProdName').value.trim();
+            const cat = document.getElementById('newProdCat').value;
+            const price = parseFloat(document.getElementById('newProdPrice').value) || 0;
+            const unit = document.getElementById('newProdUnit').value.trim() || 'unité';
+            const composition = document.getElementById('newProdComposition').value.trim();
+
+            if (!name || price <= 0) {
+                showToast("Veuillez saisir un nom et un prix valides.");
+                return;
+            }
+
+            let badgeName = 'Frais';
+            if (cat === 'packs') badgeName = 'Pack';
+            if (cat === 'halieutique') badgeName = 'Halieutique';
+            if (cat === 'volaille') badgeName = 'Volaille';
+            if (cat === 'oeufs') badgeName = 'Œufs';
+            if (cat === 'bio') badgeName = '100% BIO';
+
+            const newProd = {
+                id: 'prod-' + Date.now(),
+                name,
+                category: cat,
+                price,
+                unit,
+                badge: badgeName,
+                image: FALLBACK_IMAGE,
+                composition: cat === 'packs' ? composition : '',
+                inStock: true
+            };
+
+            productsList.unshift(newProd);
+            saveLocalProducts();
+            renderAdminProductsTable();
+            renderProducts();
+
+            // Clear inputs
+            document.getElementById('newProdName').value = '';
+            document.getElementById('newProdPrice').value = '';
+            document.getElementById('newProdComposition').value = '';
+
+            showToast("Produit / Pack ajouté avec succès !");
+        }
+
+        // --- PACK COMPOSER MODAL LOGIC ---
+        function openPackComposerModal(targetId) {
+            currentComposerTargetId = targetId;
+            composerSelections = {};
+
+            let existingComp = '';
+            if (targetId === 'NEW') {
+                existingComp = document.getElementById('newProdComposition').value;
+            } else {
+                const prod = productsList.find(p => p.id === targetId);
+                if (prod && prod.composition) existingComp = prod.composition;
+            }
+
+            // Parse existing string if present
+            if (existingComp) {
+                const parts = existingComp.split(',');
+                parts.forEach(part => {
+                    const trimmed = part.trim();
+                    if (!trimmed) return;
+                    productsList.forEach(item => {
+                        if (item.category !== 'packs') {
+                            if (trimmed.toLowerCase().includes(item.name.toLowerCase())) {
+                                const numMatch = trimmed.match(/([0-9]+(?:\.[0-9]+)?)/);
+                                const qty = numMatch ? parseFloat(numMatch[1]) : 1;
+                                composerSelections[item.id] = {
+                                    selected: true,
+                                    qty,
+                                    name: item.name,
+                                    unit: item.unit || 'unité'
+                                };
+                            }
+                        }
+                    });
+                });
+            }
+
+            renderPackComposerGrid();
+            updateComposerPreviewText();
+
+            document.getElementById('packComposerModal').classList.remove('hidden');
+        }
+
+        function closePackComposerModal() {
+            document.getElementById('packComposerModal').classList.add('hidden');
+        }
+
+        function renderPackComposerGrid() {
+            const grid = document.getElementById('composerItemsGrid');
+            if (!grid) return;
+
+            const availItems = productsList.filter(p => p.category !== 'packs');
+
+            if (availItems.length === 0) {
+                grid.innerHTML = `<p class="col-span-full text-center text-xs text-slate-400 py-6">Aucun produit individuel disponible dans le catalogue.</p>`;
+                return;
+            }
+
+            grid.innerHTML = availItems.map(item => {
+                const sel = composerSelections[item.id] || { selected: false, qty: 1, name: item.name, unit: item.unit || 'unité' };
+
+                return `
+                <div class="p-2.5 rounded-xl border ${sel.selected ? 'border-oumy-green bg-teal-50/80' : 'border-slate-200 bg-white'} flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                        <input type="checkbox" id="chk-comp-${item.id}" ${sel.selected ? 'checked' : ''} onchange="toggleComposerItem('${item.id}')" class="w-4 h-4 rounded text-oumy-green focus:ring-oumy-green shrink-0 cursor-pointer">
+                        <img src="${item.image || FALLBACK_IMAGE}" alt="${item.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-9 h-9 object-cover rounded-lg border border-slate-200 shrink-0">
+                        <div class="min-w-0 flex-1">
+                            <label for="chk-comp-${item.id}" class="font-bold text-xs text-slate-900 block truncate cursor-pointer">${item.name}</label>
+                            <span class="text-[10px] text-slate-500 font-medium">${item.price} FCFA / ${item.unit || 'unité'}</span>
+                        </div>
+                    </div>
+
+                    ${sel.selected ? `
+                    <div class="flex items-center gap-1 shrink-0 bg-white border border-teal-300 rounded-lg px-1.5 py-0.5">
+                        <input type="number" value="${sel.qty}" min="0.5" step="0.5" onchange="updateComposerQty('${item.id}', this.value)" class="w-12 text-center text-xs font-extrabold outline-none bg-transparent">
+                        <span class="text-[10px] font-bold text-slate-600">${sel.unit}</span>
+                    </div>
+                    ` : ''}
+                </div>
+                `;
+            }).join('');
+        }
+
+        function toggleComposerItem(itemId) {
+            const item = productsList.find(p => p.id === itemId);
+            if (!item) return;
+
+            if (!composerSelections[itemId]) {
+                composerSelections[itemId] = { selected: true, qty: 1, name: item.name, unit: item.unit || 'unité' };
+            } else {
+                composerSelections[itemId].selected = !composerSelections[itemId].selected;
+            }
+            renderPackComposerGrid();
+            updateComposerPreviewText();
+        }
+
+        function updateComposerQty(itemId, val) {
+            const num = parseFloat(val) || 1;
+            if (composerSelections[itemId]) {
+                composerSelections[itemId].qty = Math.max(0.5, num);
+            }
+            updateComposerPreviewText();
+        }
+
+        function buildComposerString() {
+            const parts = [];
+            Object.keys(composerSelections).forEach(id => {
+                const item = composerSelections[id];
+                if (item && item.selected) {
+                    parts.push(`${item.qty}${item.unit} ${item.name}`);
+                }
+            });
+            return parts.join(', ');
+        }
+
+        function updateComposerPreviewText() {
+            const preview = document.getElementById('composerPreviewText');
+            if (!preview) return;
+            const str = buildComposerString();
+            preview.textContent = str || 'Aucun élément sélectionné...';
+        }
+
+        function applyComposerToPack() {
+            const formattedStr = buildComposerString();
+            if (!formattedStr) {
+                showToast("Veuillez sélectionner au moins un article.");
+                return;
+            }
+
+            if (currentComposerTargetId === 'NEW') {
+                const input = document.getElementById('newProdComposition');
+                if (input) input.value = formattedStr;
+            } else {
+                const index = productsList.findIndex(p => p.id === currentComposerTargetId);
+                if (index > -1) {
+                    productsList[index].composition = formattedStr;
+                    saveLocalProducts();
+                    renderProducts();
+                    renderAdminProductsTable();
+                }
+            }
+
+            closePackComposerModal();
+            showToast("Composition mise à jour !");
+        }
+
+        // --- RENDER ADMIN ORDERS & CSV EXPORT ---
+        function renderAdminOrders() {
+            const container = document.getElementById('adminOrdersList');
+            if (!container) return;
+
+            if (ordersHistory.length === 0) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>`;
+                return;
+            }
+
+            container.innerHTML = ordersHistory.map(ord => `
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                    <div class="flex items-center justify-between font-bold text-slate-900">
+                        <span>${ord.id} — ${ord.customer.name}</span>
+                        <span class="text-oumy-green">${ord.total.toLocaleString()} FCFA</span>
+                    </div>
+                    <p class="text-slate-500 text-[10px]">📍 ${ord.customer.address} | 📞 ${ord.customer.phone}</p>
+                    <div class="text-[11px] text-slate-700 bg-white p-2 rounded-lg border border-slate-100">
+                        ${ord.items.map(i => `${i.qty}x ${i.name}`).join(', ')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function exportOrdersToCSV() {
+            if (ordersHistory.length === 0) {
+                showToast("Aucune commande à exporter.");
+                return;
+            }
+
+            let csv = "ID,Date,Client,Telephone,Adresse,Total FCFA\n";
+            ordersHistory.forEach(o => {
+                csv += `"${o.id}","${o.date}","${o.customer.name}","${o.customer.phone}","${o.customer.address}","${o.total}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `Commandes_OumysFarm_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function saveSettingsPhone() {
+            const phone = document.getElementById('settingPhone').value.trim();
+            if (phone) {
+                oumyPhone = phone;
+                localStorage.setItem('oumy_phone', phone);
+                showToast("Numéro WhatsApp enregistré !");
+            }
+        }
+
+        function saveNewAdminPassword() {
+            const pass = document.getElementById('settingNewPass').value.trim();
+            if (pass.length < 8 || !/\d/.test(pass) || !/[!@#$%^&*(),.?":{}|<>]/?.test(pass)) {
+                showToast("Min. 8 caractères avec au moins 1 chiffre et 1 caractère spécial.");
+                return;
+            }
+            adminPassword = pass;
+            localStorage.setItem('oumy_admin_pass', pass);
+            showToast("Mot de passe Admin mis à jour !");
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            if (!toast || !toastMsg) return;
+
+            toastMsg.textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
