@@ -757,6 +757,62 @@
             }
         ];
 
+        const PRODUCT_IMAGES = {
+            "pack-big-size": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=85",
+            "pack-eco-15j": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=800&q=85",
+            "pack-vert-bio-3000": "https://images.unsplash.com/photo-1576045057995-568f588f82fb?auto=format&fit=crop&w=800&q=85",
+            "pack-vert-bio-5000": "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=800&q=85",
+            "botte-bissap-bio": "https://images.unsplash.com/photo-1515586000433-45406d8e6662?auto=format&fit=crop&w=800&q=85",
+            "pack-nana-mix-bio": "https://images.unsplash.com/photo-1459411621453-7b03977f4bfc?auto=format&fit=crop&w=800&q=85",
+            "pot-piment-huile-olive": "https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=800&q=85",
+            "sweet-pickles-2kg": "https://images.unsplash.com/photo-1534483509719-3feaee7c30da?auto=format&fit=crop&w=800&q=85",
+            "sweet-pickles-1kg": "https://images.unsplash.com/photo-1534483509719-3feaee7c30da?auto=format&fit=crop&w=800&q=85",
+            "piment-sofia": "https://images.unsplash.com/photo-1583119022894-919a68a3d0d?auto=format&fit=crop&w=800&q=85",
+            "piment-goana": "https://images.unsplash.com/photo-1583119022894-919a68a3d0d?auto=format&fit=crop&w=800&q=85",
+            "piment-thioukouli-vert": "https://images.unsplash.com/photo-1583119022894-919a68a3d0d?auto=format&fit=crop&w=800&q=85",
+            "poivron-vert-simba": "https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?auto=format&fit=crop&w=800&q=85",
+            "concombre": "https://images.unsplash.com/photo-1449300079323-02e209d9d935?auto=format&fit=crop&w=800&q=85",
+            "betteraves": "https://images.unsplash.com/photo-1596097635121-14b63f7b1b1a?auto=format&fit=crop&w=800&q=85",
+            "tomates-cerises": "https://images.unsplash.com/photo-1546094096-0df4bcaaa337?auto=format&fit=crop&w=800&q=85",
+            "citron-vert": "https://images.unsplash.com/photo-1590502593747-42a996133562?auto=format&fit=crop&w=800&q=85",
+            "tomates-fraiches": "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=800&q=85",
+            "poivron-jaune-rouge": "https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?auto=format&fit=crop&w=800&q=85",
+            "piment-vert-jaune-rouge": "https://images.unsplash.com/photo-1583119022894-919a68a3d0d?auto=format&fit=crop&w=800&q=85",
+            "oignon-vert": "https://images.unsplash.com/photo-1508747703725-719777637510?auto=format&fit=crop&w=800&q=85",
+            "gombo": "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?auto=format&fit=crop&w=800&q=85",
+            "carottes": "https://images.unsplash.com/photo-1598170845058-12ef4a457939?auto=format&fit=crop&w=800&q=85",
+            "navet": "https://images.unsplash.com/photo-1598030343246-eec71cb442c4?auto=format&fit=crop&w=800&q=85",
+            "chou": "https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?auto=format&fit=crop&w=800&q=85",
+            "aubergine-amere-diakhatou": "https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=800&q=85",
+            "aubergine-douce": "https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=800&q=85",
+            "manioc": "https://images.unsplash.com/photo-1595844353218-0f9b9a9b7c89?auto=format&fit=crop&w=800&q=85",
+            "patates": "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=85",
+            "potiron": "https://images.unsplash.com/photo-1506917750581-1f2a1a4c7a2a?auto=format&fit=crop&w=800&q=85",
+            "ail": "https://images.unsplash.com/photo-1540148426945-6cf22a6b2383?auto=format&fit=crop&w=800&q=85",
+            "oignon": "https://images.unsplash.com/photo-1618512496248-a07fe83aa8cf?auto=format&fit=crop&w=800&q=85",
+            "pomme-de-terre": "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=85",
+            "carottes-bio-sucrees": "https://images.unsplash.com/photo-1598170845058-12ef4a457939?auto=format&fit=crop&w=800&q=85"
+        };
+
+        function applyProductImages(products) {
+            const vegetableImage = "https://images.pexels.com/photos/1300972/pexels-photo-1300972.jpeg?auto=compress&cs=tinysrgb&w=800";
+            const tomatoImage = "https://images.pexels.com/photos/533280/pexels-photo-533280.jpeg?auto=compress&cs=tinysrgb&w=800";
+            const pepperImage = "https://images.pexels.com/photos/2893639/pexels-photo-2893639.jpeg?auto=compress&cs=tinysrgb&w=800";
+
+            return products.map(product => {
+                if (product.category !== 'legumes') {
+                    return { ...product, image: product.image || FALLBACK_IMAGE };
+                }
+
+                const productName = product.name.toLowerCase();
+                let image = vegetableImage;
+                if (productName.includes('tomate')) image = tomatoImage;
+                if (productName.includes('piment') || productName.includes('poivron')) image = pepperImage;
+
+                return { ...product, image };
+            });
+        }
+
         // --- GLOBAL STATE ---
         let productsList = [];
         let cartItems = [];
@@ -783,16 +839,16 @@
                     const savedProducts = JSON.parse(savedProds);
                     const legacyProductIds = new Set(['oignons-locaux', 'pommes-de-terre', 'carottes-bio']);
                     const savedIds = new Set(savedProducts.map(product => product.id));
-                    productsList = [
+                    productsList = applyProductImages([
                         ...savedProducts.filter(product => !legacyProductIds.has(product.id)),
                         ...DEFAULT_PRODUCTS.filter(product => !savedIds.has(product.id))
-                    ];
+                    ]);
                     saveLocalProducts();
                 } catch (e) {
-                    productsList = DEFAULT_PRODUCTS;
+                    productsList = applyProductImages(DEFAULT_PRODUCTS);
                 }
             } else {
-                productsList = DEFAULT_PRODUCTS;
+                productsList = applyProductImages(DEFAULT_PRODUCTS);
             }
 
             const savedOrders = localStorage.getItem('oumy_orders');
