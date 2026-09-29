@@ -795,21 +795,40 @@
         };
 
         function applyProductImages(products) {
-            const vegetableImage = "https://images.pexels.com/photos/1300972/pexels-photo-1300972.jpeg?auto=compress&cs=tinysrgb&w=800";
-            const tomatoImage = "https://images.pexels.com/photos/533280/pexels-photo-533280.jpeg?auto=compress&cs=tinysrgb&w=800";
-            const pepperImage = "https://images.pexels.com/photos/2893639/pexels-photo-2893639.jpeg?auto=compress&cs=tinysrgb&w=800";
+            const localImages = {
+                "botte-bissap-bio": "Images/botte-bissap-bio.jpg",
+                "piment-sofia": "Images/piment-sofia.jpg",
+                "piment-goana": "Images/piment-goana.jpg",
+                "piment-thioukouli-vert": "Images/piment-thioukouli-vert.jpg",
+                "poivron-vert-simba": "Images/poivron-vert-simba.jpg",
+                "concombre": "Images/concombre.jpg",
+                "betteraves": "Images/betteraves.jpg",
+                "tomates-cerises": "Images/tomates-cerises.jpg",
+                "citron-vert": "Images/citron-vert.jpg",
+                "tomates-fraiches": "Images/tomates-fraiches.jpg",
+                "poivron-jaune-rouge": "Images/poivron-jaune-rouge.jpg",
+                "piment-vert-jaune-rouge": "Images/piment-vert-jaune-rouge.jpg",
+                "oignon-vert": "Images/oignon-vert.jpg",
+                "gombo": "Images/gombo.jpg",
+                "carottes": "Images/carottes.jpg",
+                "navet": "Images/navet.jpg",
+                "chou": "Images/chou.jpg",
+                "aubergine-amere-diakhatou": "Images/aubergine-amere-diakhatou.jpg",
+                "aubergine-douce": "Images/aubergine-douce.jpg",
+                "manioc": "Images/manioc.jpg",
+                "patates": "Images/patates.jpg",
+                "potiron": "Images/potiron.jpg",
+                "ail": "Images/ail.jpg",
+                "oignon": "Images/oignon.jpg",
+                "pomme-de-terre": "Images/pomme-de-terre.jpg",
+                "carottes-bio-sucrees": "Images/carottes.jpg"
+            };
 
             return products.map(product => {
-                if (product.category !== 'legumes') {
-                    return { ...product, image: product.image || FALLBACK_IMAGE };
-                }
-
-                const productName = product.name.toLowerCase();
-                let image = vegetableImage;
-                if (productName.includes('tomate')) image = tomatoImage;
-                if (productName.includes('piment') || productName.includes('poivron')) image = pepperImage;
-
-                return { ...product, image };
+                return {
+                    ...product,
+                    image: localImages[product.id] || product.image || FALLBACK_IMAGE
+                };
             });
         }
 
