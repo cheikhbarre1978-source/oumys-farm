@@ -325,6 +325,11 @@
                             </div>
 
                             <div class="sm:col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-600">URL de la photo :</label>
+                                <input type="url" id="newProdImage" placeholder="https://.../photo.jpg" class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none">
+                            </div>
+
+                            <div class="sm:col-span-2">
                                 <label class="block text-[10px] font-bold text-slate-600">Composition du pack (si catégorie Pack) :</label>
                                 <div class="flex gap-2">
                                     <input type="text" id="newProdComposition" placeholder="Ex: 10kg Oignons, 10kg Pommes de terre..." class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none flex-1">
@@ -1234,6 +1239,11 @@
                         </div>
                     </div>
 
+                    <div class="pt-2 border-t border-slate-100 space-y-1">
+                        <label class="text-[10px] font-bold text-slate-500 uppercase">URL de la photo :</label>
+                        <input type="url" value="${(p.image || '').replace(/"/g, '&quot;')}" onchange="updateProductImage('${p.id}', this.value)" class="w-full px-2 py-1 text-xs border border-slate-300 rounded-lg outline-none focus:border-oumy-green" placeholder="https://.../photo.jpg">
+                    </div>
+
                     ${isPack ? `
                     <div class="pt-2 border-t border-slate-100 bg-amber-50/50 p-2 rounded-xl space-y-2">
                         <div class="flex items-center justify-between gap-2 flex-wrap">
@@ -1270,6 +1280,17 @@
             }
         }
 
+        function updateProductImage(id, newImage) {
+            const index = productsList.findIndex(p => p.id === id);
+            if (index > -1) {
+                productsList[index].image = newImage.trim() || FALLBACK_IMAGE;
+                saveLocalProducts();
+                renderAdminProductsTable();
+                renderProducts();
+                showToast("Photo du produit mise à jour !");
+            }
+        }
+
         function updateProductPrice(id, newPrice) {
             const index = productsList.findIndex(p => p.id === id);
             if (index > -1) {
@@ -1302,6 +1323,7 @@
             const cat = document.getElementById('newProdCat').value;
             const price = parseFloat(document.getElementById('newProdPrice').value) || 0;
             const unit = document.getElementById('newProdUnit').value.trim() || 'unité';
+            const image = document.getElementById('newProdImage').value.trim() || FALLBACK_IMAGE;
             const composition = document.getElementById('newProdComposition').value.trim();
 
             if (!name || price <= 0) {
@@ -1323,7 +1345,7 @@
                 price,
                 unit,
                 badge: badgeName,
-                image: FALLBACK_IMAGE,
+                image,
                 composition: cat === 'packs' ? composition : '',
                 inStock: true
             };
@@ -1336,6 +1358,7 @@
             // Clear inputs
             document.getElementById('newProdName').value = '';
             document.getElementById('newProdPrice').value = '';
+            document.getElementById('newProdImage').value = '';
             document.getElementById('newProdComposition').value = '';
 
             showToast("Produit / Pack ajouté avec succès !");
