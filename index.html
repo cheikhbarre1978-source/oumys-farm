@@ -1213,7 +1213,11 @@
                 <div class="bg-white p-3 rounded-xl border border-slate-200 space-y-2 text-xs">
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2 min-w-0 flex-1">
-                            <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0">
+                            <label class="relative w-10 h-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 cursor-pointer group" title="Cliquer pour choisir une photo">
+                                <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-full h-full object-cover">
+                                <span class="absolute inset-0 hidden group-hover:flex items-center justify-center bg-slate-950/60 text-white text-[10px]"><i class="fa-solid fa-camera"></i></span>
+                                <input type="file" accept="image/*" class="hidden" onchange="handleProductImageFile('${p.id}', this)">
+                            </label>
                             <div class="min-w-0 flex-1">
                                 <label class="text-[9px] font-bold text-slate-400 block uppercase">Nom du pack / produit :</label>
                                 <input type="text" value="${p.name.replace(/"/g, '&quot;')}" onchange="updateProductName('${p.id}', this.value)" class="w-full text-xs font-extrabold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-oumy-green focus:bg-white" placeholder="Nom du produit ou pack">
@@ -1289,6 +1293,38 @@
                 renderProducts();
                 showToast("Photo du produit mise à jour !");
             }
+        }
+
+        function handleProductImageFile(id, input) {
+            const file = input.files?.[0];
+            const index = productsList.findIndex(p => p.id === id);
+            if (!file || index < 0) return;
+
+            if (!file.type.startsWith('image/')) {
+                showToast("Veuillez sélectionner une image.");
+                input.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = event => {
+                const selectedImage = new Image();
+                selectedImage.onload = () => {
+                    const maxSize = 900;
+                    const scale = Math.min(1, maxSize / Math.max(selectedImage.width, selectedImage.height));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(selectedImage.width * scale);
+                    canvas.height = Math.round(selectedImage.height * scale);
+                    canvas.getContext('2d').drawImage(selectedImage, 0, 0, canvas.width, canvas.height);
+                    productsList[index].image = canvas.toDataURL('image/jpeg', 0.82);
+                    saveLocalProducts();
+                    renderAdminProductsTable();
+                    renderProducts();
+                    showToast("Photo sélectionnée et enregistrée !");
+                };
+                selectedImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
         }
 
         function updateProductPrice(id, newPrice) {
