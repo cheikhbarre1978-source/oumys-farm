@@ -894,11 +894,23 @@
         function saveLocalProducts() {
             localStorage.setItem('oumy_products', JSON.stringify(productsList));
             if (cloudDb && cloudCatalogLoaded) {
-                cloudDb.collection('catalog').doc('products').set({
-                    products: productsList,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }).catch(() => showToast("Synchronisation cloud impossible pour le moment."));
+                syncCatalogToCloud();
             }
+        }
+
+        function syncCatalogToCloud() {
+            if (!cloudDb) return Promise.resolve();
+
+            const batch = cloudDb.batch();
+            const productsRef = cloudDb.collection('catalogProducts');
+            productsList.forEach(product => {
+                batch.set(productsRef.doc(product.id), {
+                    ...product,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            return batch.commit().catch(() => showToast("Synchronisation cloud impossible pour le moment."));
         }
 
         function initializeCloudSync() {
@@ -912,20 +924,18 @@
                     messagingSenderId: '328501948652'
                 });
                 cloudDb = firebase.firestore();
-                cloudStorage = firebase.storage();
 
                 firebase.auth().signInAnonymously().then(() => {
-                    const catalogRef = cloudDb.collection('catalog').doc('products');
-                    catalogRef.onSnapshot(snapshot => {
-                        if (snapshot.exists && Array.isArray(snapshot.data().products)) {
+                    cloudDb.collection('catalogProducts').onSnapshot(snapshot => {
+                        if (!snapshot.empty) {
                             cloudCatalogLoaded = true;
-                            productsList = applyProductImages(snapshot.data().products);
+                            productsList = applyProductImages(snapshot.docs.map(doc => doc.data()));
                             localStorage.setItem('oumy_products', JSON.stringify(productsList));
                             renderProducts();
                             renderAdminProductsTable();
                         } else {
                             cloudCatalogLoaded = true;
-                            saveLocalProducts();
+                            syncCatalogToCloud();
                         }
                     });
                 }).catch(() => showToast("Mode local : connexion cloud indisponible."));
@@ -1367,28 +1377,11 @@
                     canvas.height = Math.round(selectedImage.height * scale);
                     canvas.getContext('2d').drawImage(selectedImage, 0, 0, canvas.width, canvas.height);
                     const localPreview = canvas.toDataURL('image/jpeg', 0.82);
-                    canvas.toBlob(blob => {
-                        if (!blob || !cloudStorage) {
-                            productsList[index].image = localPreview;
-                            saveLocalProducts();
-                            renderAdminProductsTable();
-                            renderProducts();
-                            showToast("Photo enregistrée sur cet appareil.");
-                            return;
-                        }
-
-                        const imageRef = cloudStorage.ref(`catalog/${id}-${Date.now()}.jpg`);
-                        imageRef.put(blob)
-                            .then(snapshot => snapshot.ref.getDownloadURL())
-                            .then(downloadUrl => {
-                                productsList[index].image = downloadUrl;
-                                saveLocalProducts();
-                                renderAdminProductsTable();
-                                renderProducts();
-                                showToast("Photo synchronisée pour tous les appareils !");
-                            })
-                            .catch(() => showToast("La photo n'a pas pu être synchronisée."));
-                    }, 'image/jpeg', 0.82);
+                    productsList[index].image = localPreview;
+                    saveLocalProducts();
+                    renderAdminProductsTable();
+                    renderProducts();
+                    showToast(cloudDb ? "Photo synchronisée pour tous les appareils !" : "Photo enregistrée sur cet appareil.");
                 };
                 selectedImage.src = event.target.result;
             };
