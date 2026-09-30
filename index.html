@@ -27,6 +27,12 @@
     
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase Cloud Sync -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -844,6 +850,9 @@
         let currentCategoryFilter = 'all';
         let currentComposerTargetId = null;
         let composerSelections = {};
+        let cloudDb = null;
+        let cloudStorage = null;
+        let cloudCatalogLoaded = false;
 
         let oumyPhone = localStorage.getItem('oumy_phone') || '221770000000';
         let adminPassword = localStorage.getItem('oumy_admin_pass') || 'Oumy2026!';
@@ -854,6 +863,7 @@
             loadLocalState();
             renderProducts();
             updateCartUI();
+            initializeCloudSync();
         });
 
         function loadLocalState() {
@@ -883,6 +893,46 @@
 
         function saveLocalProducts() {
             localStorage.setItem('oumy_products', JSON.stringify(productsList));
+            if (cloudDb && cloudCatalogLoaded) {
+                cloudDb.collection('catalog').doc('products').set({
+                    products: productsList,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }).catch(() => showToast("Synchronisation cloud impossible pour le moment."));
+            }
+        }
+
+        function initializeCloudSync() {
+            try {
+                firebase.initializeApp({
+                    projectId: 'oumys-farm',
+                    appId: '1:328501948652:web:a1971462d37a259c25b5c9',
+                    storageBucket: 'oumys-farm.firebasestorage.app',
+                    apiKey: 'AIzaSyBc7NPmHfJuKcRqqeto_4SCAQ2LF6LrVgA',
+                    authDomain: 'oumys-farm.firebaseapp.com',
+                    messagingSenderId: '328501948652'
+                });
+                cloudDb = firebase.firestore();
+                cloudStorage = firebase.storage();
+
+                firebase.auth().signInAnonymously().then(() => {
+                    const catalogRef = cloudDb.collection('catalog').doc('products');
+                    catalogRef.onSnapshot(snapshot => {
+                        if (snapshot.exists && Array.isArray(snapshot.data().products)) {
+                            cloudCatalogLoaded = true;
+                            productsList = applyProductImages(snapshot.data().products);
+                            localStorage.setItem('oumy_products', JSON.stringify(productsList));
+                            renderProducts();
+                            renderAdminProductsTable();
+                        } else {
+                            cloudCatalogLoaded = true;
+                            saveLocalProducts();
+                        }
+                    });
+                }).catch(() => showToast("Mode local : connexion cloud indisponible."));
+            } catch (error) {
+                cloudDb = null;
+                cloudStorage = null;
+            }
         }
 
         // --- RENDER STOREFRONT PRODUCTS ---
@@ -1316,11 +1366,29 @@
                     canvas.width = Math.round(selectedImage.width * scale);
                     canvas.height = Math.round(selectedImage.height * scale);
                     canvas.getContext('2d').drawImage(selectedImage, 0, 0, canvas.width, canvas.height);
-                    productsList[index].image = canvas.toDataURL('image/jpeg', 0.82);
-                    saveLocalProducts();
-                    renderAdminProductsTable();
-                    renderProducts();
-                    showToast("Photo sélectionnée et enregistrée !");
+                    const localPreview = canvas.toDataURL('image/jpeg', 0.82);
+                    canvas.toBlob(blob => {
+                        if (!blob || !cloudStorage) {
+                            productsList[index].image = localPreview;
+                            saveLocalProducts();
+                            renderAdminProductsTable();
+                            renderProducts();
+                            showToast("Photo enregistrée sur cet appareil.");
+                            return;
+                        }
+
+                        const imageRef = cloudStorage.ref(`catalog/${id}-${Date.now()}.jpg`);
+                        imageRef.put(blob)
+                            .then(snapshot => snapshot.ref.getDownloadURL())
+                            .then(downloadUrl => {
+                                productsList[index].image = downloadUrl;
+                                saveLocalProducts();
+                                renderAdminProductsTable();
+                                renderProducts();
+                                showToast("Photo synchronisée pour tous les appareils !");
+                            })
+                            .catch(() => showToast("La photo n'a pas pu être synchronisée."));
+                    }, 'image/jpeg', 0.82);
                 };
                 selectedImage.src = event.target.result;
             };
