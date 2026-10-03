@@ -1,9 +1,101 @@
 rules_version = '2';
 
 service cloud.firestore {
+  function isAdmin() {
+    return request.auth != null
+      && request.auth.token.email == 'cheikhbarre1978@gmail.com'
+      && request.auth.token.firebase.sign_in_provider == 'password';
+  }
+
+  function validDeliveryZone(zone, expectedId) {
+    return zone is map
+      && zone.keys().hasOnly(['id', 'name', 'areas', 'fee'])
+      && zone.keys().hasAll(['id', 'name', 'areas', 'fee'])
+      && zone.id == expectedId
+      && zone.name is string
+      && zone.name.size() > 0
+      && zone.name.size() <= 60
+      && zone.areas is string
+      && zone.areas.size() <= 180
+      && zone.fee is int
+      && zone.fee >= 0
+      && zone.fee <= 100000;
+  }
+
+  function validDeliverySettings() {
+    let data = request.resource.data;
+    return data.keys().hasOnly(['zones', 'updatedAt'])
+      && data.keys().hasAll(['zones', 'updatedAt'])
+      && data.updatedAt is timestamp
+      && data.zones is list
+      && data.zones.size() == 4
+      && validDeliveryZone(data.zones[0], 'z1')
+      && validDeliveryZone(data.zones[1], 'z2')
+      && validDeliveryZone(data.zones[2], 'z3')
+      && validDeliveryZone(data.zones[3], 'pickup');
+  }
+
+  function validWhatsAppSettings() {
+    let data = request.resource.data;
+    return data.keys().hasOnly(['phone', 'updatedAt'])
+      && data.keys().hasAll(['phone', 'updatedAt'])
+      && data.phone is string
+      && data.phone.matches('^[0-9]{8,15}$')
+      && data.updatedAt is timestamp;
+  }
+
+  function validOrder(orderId) {
+    let data = request.resource.data;
+    let customer = data.customer;
+    return data.keys().hasOnly(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total'])
+      && data.keys().hasAll(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total'])
+      && data.id == orderId
+      && data.date is string
+      && data.date.size() <= 40
+      && data.createdAt is timestamp
+      && customer is map
+      && customer.keys().hasOnly(['name', 'phone', 'address', 'zone'])
+      && customer.keys().hasAll(['name', 'phone', 'address', 'zone'])
+      && customer.name is string
+      && customer.name.size() > 0
+      && customer.name.size() <= 100
+      && customer.phone is string
+      && customer.phone.size() >= 8
+      && customer.phone.size() <= 25
+      && customer.address is string
+      && customer.address.size() > 0
+      && customer.address.size() <= 300
+      && customer.zone is string
+      && customer.zone.size() <= 200
+      && data.items is list
+      && data.items.size() > 0
+      && data.items.size() <= 50
+      && data.subtotal is number
+      && data.subtotal >= 0
+      && data.fee is number
+      && data.fee >= 0
+      && data.total is number
+      && data.total == data.subtotal + data.fee;
+  }
+
   match /databases/{database}/documents {
     match /catalogProducts/{productId} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /siteSettings/{settingId} {
+      allow read: if settingId == 'delivery' || settingId == 'whatsapp';
+      allow create, update: if isAdmin()
+        && ((settingId == 'delivery' && validDeliverySettings())
+          || (settingId == 'whatsapp' && validWhatsAppSettings()));
+      allow delete: if false;
+    }
+
+    match /orders/{orderId} {
+      allow create: if request.auth != null && validOrder(orderId);
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
   }
 }

@@ -41,9 +41,16 @@
 
     <style>
         body { font-family: 'Inter', sans-serif; }
+        .product-image-frame { aspect-ratio: 4 / 3; }
+        .product-image { object-fit: contain; padding: 0.5rem; }
+        .cart-line-total { white-space: nowrap; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        #adminModal .custom-scrollbar { scrollbar-width: auto; scrollbar-color: #64748b #f1f5f9; }
+        #adminModal .custom-scrollbar::-webkit-scrollbar { width: 12px; height: 12px; }
+        #adminModal .custom-scrollbar::-webkit-scrollbar-thumb { background: #64748b; border: 3px solid #f1f5f9; border-radius: 8px; }
+        #adminModal .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
 <body class="h-full flex flex-col text-slate-800 bg-slate-50 antialiased selection:bg-oumy-green selection:text-white">
@@ -113,11 +120,11 @@
                 <button type="button" onclick="filterCategory('all')" id="filter-all" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-oumy-green text-white shadow-xs transition-all">
                     🛍️ Tous les rayons
                 </button>
-                <button type="button" onclick="filterCategory('packs')" id="filter-packs" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
-                    📦 Packs Familiaux & Éco
-                </button>
                 <button type="button" onclick="filterCategory('legumes')" id="filter-legumes" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
                     🥬 Légumes & Féculents
+                </button>
+                <button type="button" onclick="filterCategory('packs')" id="filter-packs" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                    📦 Pack vert
                 </button>
                 <button type="button" onclick="filterCategory('halieutique')" id="filter-halieutique" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
                     🐟 Produits Halieutiques
@@ -233,9 +240,27 @@
                 </div>
 
                 <button type="submit" class="w-full py-3 bg-oumy-green hover:bg-teal-800 text-white font-black rounded-xl shadow-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider transition-transform active:scale-98">
-                    <i class="fa-brands fa-whatsapp text-lg text-amber-300"></i> Envoyer la commande sur WhatsApp
+                    <i class="fa-solid fa-circle-check text-lg text-amber-300"></i> Confirmer ma commande
                 </button>
             </form>
+        </div>
+    </div>
+
+    <div id="orderConfirmationModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs hidden" role="dialog" aria-modal="true" aria-labelledby="orderConfirmationTitle">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl border border-slate-200">
+            <div class="w-14 h-14 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <div class="space-y-1">
+                <h3 id="orderConfirmationTitle" class="text-lg font-black text-slate-900">Commande prête !</h3>
+                <p class="text-xs text-slate-600">WhatsApp s’ouvre pour transmettre la commande à Oumy ; vous pouvez rester sur cette page.</p>
+            </div>
+            <p class="text-xs font-bold text-slate-700">Référence : <span id="orderConfirmationId" class="font-mono text-oumy-green"></span></p>
+            <p id="orderStorageWarning" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">L’historique n’a pas pu être sauvegardé sur cet appareil. Transmettez la commande sur WhatsApp pour qu’Oumy la reçoive.</p>
+            <a id="orderWhatsAppLink" href="#" target="_blank" rel="noopener noreferrer" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2">
+                <i class="fa-brands fa-whatsapp text-lg"></i> Transmettre sur WhatsApp
+            </a>
+            <button type="button" onclick="closeOrderConfirmationModal()" class="w-full py-2 text-xs font-bold text-slate-600 hover:text-slate-900">Retourner au marché</button>
         </div>
     </div>
 
@@ -285,6 +310,9 @@
                     <button type="button" onclick="switchAdminTab('orders')" id="tab-orders" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
                         📋 Commandes
                     </button>
+                    <button type="button" onclick="switchAdminTab('preparations')" id="tab-preparations" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
+                        📦 Préparations
+                    </button>
                     <button type="button" onclick="switchAdminTab('settings')" id="tab-settings" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
                         ⚙️ Paramètres
                     </button>
@@ -330,9 +358,13 @@
                                 <input type="text" id="newProdUnit" placeholder="Ex: kg, poulet entier, alvéole de 30, le pack" class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none">
                             </div>
 
-                            <div class="sm:col-span-2">
-                                <label class="block text-[10px] font-bold text-slate-600">URL de la photo :</label>
-                                <input type="url" id="newProdImage" placeholder="https://.../photo.jpg" class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none">
+                            <div class="sm:col-span-2 space-y-1">
+                                <label for="newProdImageFile" class="block text-[10px] font-bold text-slate-600">Photo du produit :</label>
+                                <input type="file" id="newProdImageFile" accept="image/*" onchange="previewNewProductImage(this)" class="w-full text-xs file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-teal-100 file:text-teal-900 file:font-bold">
+                                <div id="newProdImagePreview" class="hidden flex items-center gap-2 text-[10px] text-slate-500">
+                                    <img id="newProdImagePreviewImg" alt="Aperçu de la photo" class="w-10 h-10 object-contain bg-white p-1 rounded-lg border border-slate-200">
+                                    <span id="newProdImagePreviewName" class="truncate"></span>
+                                </div>
                             </div>
 
                             <div class="sm:col-span-2">
@@ -359,14 +391,31 @@
 
                 <!-- Tab Content: Orders -->
                 <div id="adminTabOrders" class="admin-content flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 custom-scrollbar hidden">
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
                         <h4 class="font-bold text-xs text-slate-800">Historique des Commandes</h4>
-                        <button type="button" onclick="exportOrdersToCSV()" class="px-2.5 py-1 bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1">
-                            <i class="fa-solid fa-file-excel"></i> Exporter en CSV
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <label for="ordersSortOrder" class="text-[10px] font-bold text-slate-500">Trier :</label>
+                            <select id="ordersSortOrder" onchange="renderAdminOrders()" class="px-2 py-1 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white">
+                                <option value="newest">Plus récentes</option>
+                                <option value="oldest">Plus anciennes</option>
+                            </select>
+                            <button type="button" onclick="exportOrdersToCSV()" class="px-2.5 py-1 bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-file-excel"></i> Exporter en CSV
+                            </button>
+                        </div>
                     </div>
                     <div id="adminOrdersList" class="space-y-2 text-xs">
                         <!-- Dynamic orders -->
+                    </div>
+                </div>
+
+                <!-- Tab Content: Daily Preparation -->
+                <div id="adminTabPreparations" class="admin-content flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 custom-scrollbar hidden">
+                    <div class="flex items-center justify-between gap-2">
+                        <h4 class="font-bold text-xs text-slate-800">Préparations quotidiennes</h4>
+                    </div>
+                    <div id="adminDailyPreparation" class="space-y-4 text-xs">
+                        <p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>
                     </div>
                 </div>
 
@@ -376,6 +425,15 @@
                         <h5 class="font-bold text-slate-900">Numéro WhatsApp Réceptionnaire :</h5>
                         <input type="text" id="settingPhone" placeholder="221770000000" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none font-mono">
                         <button type="button" onclick="saveSettingsPhone()" class="px-3 py-1.5 bg-oumy-green text-white font-bold rounded-xl">Enregistrer le numéro</button>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                        <div class="space-y-1">
+                            <h5 class="font-bold text-slate-900">Zones et frais de livraison :</h5>
+                            <p class="text-[10px] text-slate-500">Tarifs partagés avec les clients.</p>
+                        </div>
+                        <div id="deliveryZonesAdminList" class="space-y-3"></div>
+                        <button type="button" onclick="saveDeliveryZones()" class="w-full px-3 py-2 bg-oumy-green hover:bg-teal-800 text-white font-bold rounded-xl">Enregistrer les zones et tarifs</button>
                     </div>
 
                     <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
@@ -442,6 +500,13 @@
     <script>
         // --- CONSTANTS & DEFAULT CATALOG DATA ---
         const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80";
+        const ADMIN_DELIVERY_EMAIL = 'cheikhbarre1978@gmail.com';
+        const DEFAULT_DELIVERY_ZONES = [
+            { id: 'z1', name: 'Zone 1', areas: 'Plateau, Fann, Point E, Mermoz, Ouakam', fee: 1500 },
+            { id: 'z2', name: 'Zone 2', areas: 'Almadies, Ngor, Yoff, Mamelles, Liberté', fee: 2000 },
+            { id: 'z3', name: 'Zone 3', areas: 'Pikine, Guédiawaye, Keur Massar, Rufisque', fee: 2500 },
+            { id: 'pickup', name: 'Retrait sur place', areas: 'Chez Oumy', fee: 0 }
+        ];
 
         const DEFAULT_PRODUCTS = [
             {
@@ -806,6 +871,9 @@
         };
 
         function applyProductImages(products) {
+            const defaultProductImages = Object.fromEntries(
+                DEFAULT_PRODUCTS.filter(product => product.image).map(product => [product.id, product.image])
+            );
             const localImages = {
                 "botte-bissap-bio": "Images/botte-bissap-bio.jpg",
                 "piment-sofia": "Images/piment-sofia.jpg",
@@ -836,9 +904,16 @@
             };
 
             return products.map(product => {
+                const localImage = localImages[product.id];
+                const defaultImage = defaultProductImages[product.id];
+                const hasCustomImage = product.image && (
+                    product.imageOverride === true ||
+                    (product.image !== localImage && product.image !== defaultImage && product.image !== PRODUCT_IMAGES[product.id])
+                );
+
                 return {
                     ...product,
-                    image: localImages[product.id] || product.image || FALLBACK_IMAGE
+                    image: hasCustomImage ? product.image : localImage || defaultImage || PRODUCT_IMAGES[product.id] || product.image || FALLBACK_IMAGE
                 };
             });
         }
@@ -853,14 +928,27 @@
         let cloudDb = null;
         let cloudStorage = null;
         let cloudCatalogLoaded = false;
+        let cloudSyncListenersStarted = false;
+        let cloudOrdersUnsubscribe = null;
+        let orderSubmissionInProgress = false;
+        let deliveryZones = DEFAULT_DELIVERY_ZONES.map(zone => ({ ...zone }));
+        let newProductPreviewUrl = '';
 
         let oumyPhone = localStorage.getItem('oumy_phone') || '221770000000';
-        let adminPassword = localStorage.getItem('oumy_admin_pass') || 'Oumy2026!';
+        let adminPassword = '';
+        const ADMIN_SESSION_KEY = 'oumy_admin_session_expires_at';
+        const ADMIN_SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
+        const CART_STORAGE_KEY = 'oumy_cart';
+        let adminSessionTimeout = null;
         let isAdminLoggedIn = false;
 
         // --- INIT ON LOAD ---
         document.addEventListener('DOMContentLoaded', () => {
+            restoreAdminSession();
             loadLocalState();
+            loadLocalCart();
+            renderDeliveryZoneSelect();
+            renderDeliveryZonesAdmin();
             renderProducts();
             updateCartUI();
             initializeCloudSync();
@@ -891,15 +979,66 @@
             }
         }
 
-        function saveLocalProducts() {
-            localStorage.setItem('oumy_products', JSON.stringify(productsList));
-            if (cloudDb && cloudCatalogLoaded) {
-                syncCatalogToCloud();
+        function loadLocalCart() {
+            let savedCart = null;
+            try {
+                savedCart = localStorage.getItem(CART_STORAGE_KEY) || sessionStorage.getItem(CART_STORAGE_KEY);
+            } catch (error) {
+                try { savedCart = sessionStorage.getItem(CART_STORAGE_KEY); } catch (storageError) { return; }
+            }
+            if (!savedCart) return;
+
+            try {
+                const entries = JSON.parse(savedCart);
+                if (!Array.isArray(entries)) return;
+                cartItems = entries.flatMap(entry => {
+                    const product = productsList.find(item => item.id === entry.id);
+                    const quantity = Number(entry.qty);
+                    return product && Number.isFinite(quantity) && quantity > 0
+                        ? [{ ...product, qty: quantity }]
+                        : [];
+                });
+            } catch (error) {
+                cartItems = [];
             }
         }
 
-        function syncCatalogToCloud() {
+        function saveCartState() {
+            const serializedCart = JSON.stringify(cartItems.map(item => ({ id: item.id, qty: item.qty })));
+            try {
+                if (cartItems.length) localStorage.setItem(CART_STORAGE_KEY, serializedCart);
+                else localStorage.removeItem(CART_STORAGE_KEY);
+                sessionStorage.removeItem(CART_STORAGE_KEY);
+            } catch (error) {
+                try {
+                    localStorage.removeItem(CART_STORAGE_KEY);
+                    if (cartItems.length) sessionStorage.setItem(CART_STORAGE_KEY, serializedCart);
+                    else sessionStorage.removeItem(CART_STORAGE_KEY);
+                } catch (storageError) {
+                    showToast("Impossible de sauvegarder le panier sur cet appareil.");
+                }
+            }
+        }
+
+        function refreshCartProducts() {
+            if (!cartItems.length) return;
+            cartItems = cartItems.map(cartItem => {
+                const product = productsList.find(item => item.id === cartItem.id);
+                return product ? { ...product, qty: cartItem.qty } : cartItem;
+            });
+            updateCartUI();
+        }
+
+        function saveLocalProducts(deletedProductIds = []) {
+            localStorage.setItem('oumy_products', JSON.stringify(productsList));
+            if (cloudDb && cloudCatalogLoaded) {
+                syncCatalogToCloud(deletedProductIds);
+            }
+        }
+
+        function syncCatalogToCloud(deletedProductIds = []) {
             if (!cloudDb) return Promise.resolve();
+            if (productsList.length === 0 && deletedProductIds.length === 0) return Promise.resolve();
 
             const batch = cloudDb.batch();
             const productsRef = cloudDb.collection('catalogProducts');
@@ -909,6 +1048,7 @@
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
             });
+            deletedProductIds.forEach(productId => batch.delete(productsRef.doc(productId)));
 
             return batch.commit().catch(() => showToast("Synchronisation cloud impossible pour le moment."));
         }
@@ -925,12 +1065,20 @@
                 });
                 cloudDb = firebase.firestore();
 
-                firebase.auth().signInAnonymously().then(() => {
+                firebase.auth().onAuthStateChanged(user => {
+                    if (!user) {
+                        firebase.auth().signInAnonymously().catch(() => showToast("Mode local : connexion cloud indisponible."));
+                        return;
+                    }
+                    if (cloudSyncListenersStarted) return;
+                    cloudSyncListenersStarted = true;
+
                     cloudDb.collection('catalogProducts').onSnapshot(snapshot => {
                         if (!snapshot.empty) {
                             cloudCatalogLoaded = true;
                             productsList = applyProductImages(snapshot.docs.map(doc => doc.data()));
                             localStorage.setItem('oumy_products', JSON.stringify(productsList));
+                            refreshCartProducts();
                             renderProducts();
                             renderAdminProductsTable();
                         } else {
@@ -938,7 +1086,26 @@
                             syncCatalogToCloud();
                         }
                     });
-                }).catch(() => showToast("Mode local : connexion cloud indisponible."));
+
+                    cloudDb.collection('siteSettings').doc('delivery').onSnapshot(snapshot => {
+                        if (snapshot.exists) {
+                            deliveryZones = normalizeDeliveryZones(snapshot.data().zones);
+                            renderDeliveryZoneSelect();
+                            renderDeliveryZonesAdmin();
+                            updateDeliveryFeeCalc();
+                        }
+                    }, () => showToast("Impossible de charger les tarifs de livraison."));
+
+                    cloudDb.collection('siteSettings').doc('whatsapp').onSnapshot(snapshot => {
+                        if (!snapshot.exists) return;
+                        const phone = String(snapshot.data().phone || '').replace(/\D/g, '');
+                        if (!phone) return;
+                        oumyPhone = phone;
+                        localStorage.setItem('oumy_phone', phone);
+                        const phoneInput = document.getElementById('settingPhone');
+                        if (phoneInput && document.activeElement !== phoneInput) phoneInput.value = phone;
+                    }, () => showToast("Impossible de charger le numéro WhatsApp."));
+                });
             } catch (error) {
                 cloudDb = null;
                 cloudStorage = null;
@@ -958,6 +1125,7 @@
 
                 return matchCat && matchSearch;
             });
+            filtered.sort((a, b) => Number(b.id === 'pot-piment-huile-olive') - Number(a.id === 'pot-piment-huile-olive'));
 
             if (filtered.length === 0) {
                 grid.innerHTML = `
@@ -977,8 +1145,8 @@
                 <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
                     <div>
                         <!-- Image Container -->
-                        <div class="relative aspect-4/3 overflow-hidden bg-slate-100">
-                            <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-full h-full object-cover transition-transform duration-300 hover:scale-105">
+                        <div class="relative product-image-frame overflow-hidden bg-slate-100">
+                            <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="product-image w-full h-full transition-transform duration-300 hover:scale-105">
                             
                             <!-- Badges -->
                             <div class="absolute top-2 left-2 flex flex-col gap-1">
@@ -1026,14 +1194,15 @@
         function filterCategory(cat) {
             currentCategoryFilter = cat;
             document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('bg-oumy-green', 'text-white');
-                btn.classList.add('bg-white', 'text-slate-700');
+                const isActive = btn.id === `filter-${cat}`;
+                btn.classList.toggle('bg-oumy-green', isActive);
+                btn.classList.toggle('text-white', isActive);
+                btn.classList.toggle('hover:bg-oumy-green-dark', isActive);
+                btn.classList.toggle('bg-white', !isActive);
+                btn.classList.toggle('text-slate-700', !isActive);
+                btn.classList.toggle('hover:bg-slate-100', !isActive);
+                btn.setAttribute('aria-pressed', isActive);
             });
-            const activeBtn = document.getElementById(`filter-${cat}`);
-            if (activeBtn) {
-                activeBtn.classList.remove('bg-white', 'text-slate-700');
-                activeBtn.classList.add('bg-oumy-green', 'text-white');
-            }
             renderProducts();
         }
 
@@ -1042,6 +1211,24 @@
         }
 
         // --- CART LOGIC ---
+        function isHalfKiloVegetable(item) {
+            return item.category === 'legumes' && item.unit?.trim().toLowerCase() === 'kg';
+        }
+
+        function formatQuantity(quantity) {
+            return (Number(quantity) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+        }
+
+        function formatCartQuantity(item) {
+            const quantity = formatQuantity(item.qty);
+            return isHalfKiloVegetable(item) ? `${quantity} kg` : quantity;
+        }
+
+        function formatOrderItemQuantity(item) {
+            const quantity = formatQuantity(item.qty);
+            return isHalfKiloVegetable(item) ? `${quantity} kg` : `${quantity}x`;
+        }
+
         function addToCart(productId) {
             const item = productsList.find(p => p.id === productId);
             if (!item || item.inStock === false) return;
@@ -1061,14 +1248,22 @@
             const item = cartItems.find(c => c.id === productId);
             if (!item) return;
 
-            item.qty += delta;
-            if (item.qty <= 0) {
+            const nextQuantity = Math.round((item.qty + delta) * 2) / 2;
+            if (nextQuantity <= 0) {
                 cartItems = cartItems.filter(c => c.id !== productId);
+            } else {
+                item.qty = nextQuantity;
             }
             updateCartUI();
         }
 
+        function removeCartItem(productId) {
+            cartItems = cartItems.filter(item => item.id !== productId);
+            updateCartUI();
+        }
+
         function updateCartUI() {
+            saveCartState();
             const badge = document.getElementById('cartBadge');
             const list = document.getElementById('cartItemsList');
             const subtotalEl = document.getElementById('cartSubtotal');
@@ -1076,7 +1271,7 @@
             const totalQty = cartItems.reduce((acc, c) => acc + c.qty, 0);
             const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
 
-            if (badge) badge.textContent = totalQty;
+            if (badge) badge.textContent = formatQuantity(totalQty);
             if (subtotalEl) subtotalEl.textContent = `${subtotal.toLocaleString()} FCFA`;
 
             if (!list) return;
@@ -1092,19 +1287,24 @@
             }
 
             list.innerHTML = cartItems.map(c => `
-                <div class="py-2.5 flex items-center justify-between gap-2 text-xs">
-                    <div class="min-w-0 flex-1">
-                        <h4 class="font-bold text-slate-900 truncate">${c.name}</h4>
-                        <span class="text-[10px] text-slate-500 font-medium">${c.price.toLocaleString()} FCFA / ${c.unit || 'unité'}</span>
+                <div class="py-2.5 space-y-2 text-xs">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <h4 class="font-bold text-slate-900 truncate">${c.name}</h4>
+                            <span class="text-[10px] text-slate-500 font-medium">${c.price.toLocaleString()} FCFA / ${c.unit || 'unité'}</span>
+                        </div>
+                        <span class="cart-line-total font-extrabold text-oumy-green text-xs shrink-0">${(c.price * c.qty).toLocaleString()} FCFA</span>
                     </div>
 
-                    <div class="flex items-center gap-2 shrink-0">
+                    <div class="flex items-center justify-end gap-2">
                         <div class="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
-                            <button type="button" onclick="updateCartQty('${c.id}', -1)" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">-</button>
-                            <span class="px-2 font-extrabold text-slate-900 text-xs">${c.qty}</span>
-                            <button type="button" onclick="updateCartQty('${c.id}', 1)" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">+</button>
+                            <button type="button" onclick="updateCartQty('${c.id}', -${isHalfKiloVegetable(c) ? 0.5 : 1})" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">-</button>
+                            <span class="px-2 font-extrabold text-slate-900 text-xs">${formatCartQuantity(c)}</span>
+                            <button type="button" onclick="updateCartQty('${c.id}', ${isHalfKiloVegetable(c) ? 0.5 : 1})" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">+</button>
                         </div>
-                        <span class="font-extrabold text-oumy-green text-xs w-16 text-right">${(c.price * c.qty).toLocaleString()} FCFA</span>
+                        <button type="button" onclick="removeCartItem('${c.id}')" aria-label="Supprimer ${c.name} du panier" title="Supprimer l’article" class="w-8 h-8 inline-flex items-center justify-center text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                            <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                        </button>
                     </div>
                 </div>
             `).join('');
@@ -1132,22 +1332,148 @@
             if (modal) modal.classList.add('hidden');
         }
 
+        function showOrderConfirmation(orderId, whatsappUrl, historySaved = true) {
+            document.getElementById('orderConfirmationId').textContent = orderId;
+            document.getElementById('orderWhatsAppLink').href = whatsappUrl;
+            document.getElementById('orderStorageWarning').classList.toggle('hidden', historySaved);
+            document.getElementById('orderConfirmationModal').classList.remove('hidden');
+        }
+
+        function closeOrderConfirmationModal() {
+            document.getElementById('orderConfirmationModal').classList.add('hidden');
+        }
+
+        function normalizeDeliveryZones(zones) {
+            const savedZones = Array.isArray(zones) ? zones : [];
+            return DEFAULT_DELIVERY_ZONES.map(defaultZone => {
+                const savedZone = savedZones.find(zone => zone.id === defaultZone.id) || {};
+                const fee = Number(savedZone.fee);
+                return {
+                    ...defaultZone,
+                    name: typeof savedZone.name === 'string' && savedZone.name.trim() ? savedZone.name.trim() : defaultZone.name,
+                    areas: typeof savedZone.areas === 'string' && savedZone.areas.trim() ? savedZone.areas.trim() : defaultZone.areas,
+                    fee: Number.isSafeInteger(fee) && fee >= 0 ? fee : defaultZone.fee
+                };
+            });
+        }
+
+        function escapeDeliveryHtml(value) {
+            return String(value).replace(/[&<>"']/g, character => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[character]);
+        }
+
+        function renderDeliveryZoneSelect() {
+            const select = document.getElementById('deliveryZoneSelect');
+            if (!select) return;
+
+            const selectedZone = deliveryZones.some(zone => zone.id === select.value) ? select.value : 'z1';
+            select.innerHTML = deliveryZones.map(zone => {
+                const coverage = zone.areas ? ` : ${zone.areas}` : '';
+                const price = zone.fee === 0 ? 'Gratuit' : `+${zone.fee.toLocaleString('fr-FR')} FCFA`;
+                return `<option value="${zone.id}">${escapeDeliveryHtml(zone.name + coverage)} (${price})</option>`;
+            }).join('');
+            select.value = selectedZone;
+        }
+
+        function renderDeliveryZonesAdmin() {
+            const container = document.getElementById('deliveryZonesAdminList');
+            if (!container) return;
+
+            container.innerHTML = deliveryZones.map(zone => `
+                <div class="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                    <h6 class="font-bold text-slate-800">${escapeDeliveryHtml(zone.name)}</h6>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="space-y-1">
+                            <span class="block text-[10px] font-bold text-slate-500">Nom de la zone</span>
+                            <input data-zone-id="${zone.id}" data-zone-field="name" value="${escapeDeliveryHtml(zone.name)}" maxlength="60" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
+                        </label>
+                        <label class="space-y-1">
+                            <span class="block text-[10px] font-bold text-slate-500">Quartiers desservis</span>
+                            <input data-zone-id="${zone.id}" data-zone-field="areas" value="${escapeDeliveryHtml(zone.areas)}" maxlength="180" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
+                        </label>
+                    </div>
+                    <label class="space-y-1 block">
+                        <span class="block text-[10px] font-bold text-slate-500">Frais de livraison (FCFA)</span>
+                        <input type="number" min="0" step="1" data-zone-id="${zone.id}" data-zone-field="fee" value="${zone.fee}" class="w-full sm:w-48 px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
+                    </label>
+                </div>
+            `).join('');
+        }
+
+        async function saveDeliveryZones() {
+            if (!cloudDb) {
+                showToast("Connexion Firebase indisponible ; tarifs non enregistrés.");
+                return;
+            }
+
+            let updatedZones;
+            try {
+                updatedZones = DEFAULT_DELIVERY_ZONES.map(defaultZone => {
+                    const name = document.querySelector(`[data-zone-id="${defaultZone.id}"][data-zone-field="name"]`).value.trim();
+                    const areas = document.querySelector(`[data-zone-id="${defaultZone.id}"][data-zone-field="areas"]`).value.trim();
+                    const feeInput = document.querySelector(`[data-zone-id="${defaultZone.id}"][data-zone-field="fee"]`).value;
+                    const fee = Number(feeInput);
+
+                    if (!name || !areas || !Number.isSafeInteger(fee) || fee < 0) {
+                        throw new Error('invalid-delivery-zone');
+                    }
+                    return { id: defaultZone.id, name, areas, fee };
+                });
+            } catch (error) {
+                showToast("Vérifiez les noms, quartiers et frais de chaque zone.");
+                return;
+            }
+
+            try {
+                if (!requireFirebaseAdmin()) return;
+
+                await cloudDb.collection('siteSettings').doc('delivery').set({
+                    zones: updatedZones,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                deliveryZones = updatedZones;
+                renderDeliveryZoneSelect();
+                renderDeliveryZonesAdmin();
+                updateDeliveryFeeCalc();
+                showToast("Zones et tarifs enregistrés pour tous les clients.");
+            } catch (error) {
+                if (error.code === 'auth/operation-not-allowed') {
+                    showToast("Activez e-mail/mot de passe dans Firebase Authentication.");
+                } else if (error.code === 'permission-denied') {
+                    showToast("Seul le compte administrateur peut enregistrer ces tarifs.");
+                } else {
+                    showToast("Impossible d’enregistrer les tarifs. Vérifiez la connexion et le compte administrateur.");
+                }
+            }
+        }
+
         function updateDeliveryFeeCalc() {
             const zoneSelect = document.getElementById('deliveryZoneSelect');
             const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
-
-            let fee = 1500;
-            if (zoneSelect.value === 'z2') fee = 2000;
-            if (zoneSelect.value === 'z3') fee = 2500;
-            if (zoneSelect.value === 'pickup') fee = 0;
+            const fee = deliveryZones.find(zone => zone.id === zoneSelect.value)?.fee || 0;
 
             document.getElementById('summarySubtotal').textContent = `${subtotal.toLocaleString()} FCFA`;
             document.getElementById('summaryDeliveryFee').textContent = fee > 0 ? `+${fee.toLocaleString()} FCFA` : 'Gratuit';
             document.getElementById('summaryGrandTotal').textContent = `${(subtotal + fee).toLocaleString()} FCFA`;
         }
 
-        function handleCheckoutSubmit(e) {
+        async function handleCheckoutSubmit(e) {
             e.preventDefault();
+            if (orderSubmissionInProgress || cartItems.length === 0) return;
+
+            const submitButton = e.currentTarget.querySelector('button[type="submit"]');
+            const originalButtonContent = submitButton?.innerHTML;
+            orderSubmissionInProgress = true;
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Enregistrement…';
+            }
+
             const name = document.getElementById('custName').value.trim();
             const phone = document.getElementById('custPhone').value.trim();
             const address = document.getElementById('custAddress').value.trim();
@@ -1155,10 +1481,7 @@
             const zoneText = zoneSelect.options[zoneSelect.selectedIndex].text;
 
             const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
-            let fee = 1500;
-            if (zoneSelect.value === 'z2') fee = 2000;
-            if (zoneSelect.value === 'z3') fee = 2500;
-            if (zoneSelect.value === 'pickup') fee = 0;
+            const fee = deliveryZones.find(zone => zone.id === zoneSelect.value)?.fee || 0;
 
             const total = subtotal + fee;
 
@@ -1171,7 +1494,7 @@
             msg += `🛒 *ARTICLES COMMANDÉS :*\n`;
 
             cartItems.forEach(item => {
-                msg += `- ${item.qty}x ${item.name} (${(item.price * item.qty).toLocaleString()} FCFA)\n`;
+                msg += `- ${formatOrderItemQuantity(item)} ${item.name} (${(item.price * item.qty).toLocaleString()} FCFA)\n`;
             });
 
             msg += `\n-------------------------\n`;
@@ -1181,26 +1504,68 @@
 
             // Save order locally for admin history
             const newOrder = {
-                id: 'ORD-' + Date.now(),
+                id: `ORD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                 date: new Date().toLocaleString('fr-FR'),
                 customer: { name, phone, address, zone: zoneText },
-                items: [...cartItems],
+                items: cartItems.map(item => ({
+                    id: item.id,
+                    name: item.name,
+                    category: item.category || '',
+                    price: item.price,
+                    unit: item.unit || 'unité',
+                    qty: item.qty
+                })),
                 subtotal, fee, total
             };
+
+            const whatsappWindow = window.open('about:blank', '_blank');
+            if (whatsappWindow) whatsappWindow.opener = null;
+
+            try {
+                if (!cloudDb) throw new Error('cloud-unavailable');
+                if (!firebase.auth().currentUser) await firebase.auth().signInAnonymously();
+                await cloudDb.collection('orders').doc(newOrder.id).set({
+                    ...newOrder,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (error) {
+                if (whatsappWindow) whatsappWindow.close();
+                orderSubmissionInProgress = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonContent;
+                }
+                showToast("Commande non enregistrée. Vérifiez la connexion puis réessayez ; votre panier est conservé.");
+                return;
+            }
+
             ordersHistory.unshift(newOrder);
-            localStorage.setItem('oumy_orders', JSON.stringify(ordersHistory));
+            let historySaved = true;
+            try {
+                localStorage.setItem('oumy_orders', JSON.stringify(ordersHistory));
+            } catch (error) {
+                historySaved = false;
+                ordersHistory = ordersHistory.filter(order => order.id !== newOrder.id);
+            }
+
+            const url = `https://wa.me/${oumyPhone}?text=${encodeURIComponent(msg)}`;
+            if (whatsappWindow) {
+                whatsappWindow.location.href = url;
+            }
 
             closeCheckoutModal();
             cartItems = [];
             updateCartUI();
-
-            // Redirect to WhatsApp
-            const url = `https://wa.me/${oumyPhone}?text=${encodeURIComponent(msg)}`;
-            window.open(url, '_blank');
+            orderSubmissionInProgress = false;
+            showOrderConfirmation(newOrder.id, url, historySaved);
         }
 
         // --- ADMIN DASHBOARD LOGIC ---
         function openAdminModal() {
+            if (isAdminLoggedIn && Number(sessionStorage.getItem(ADMIN_SESSION_KEY)) <= Date.now()) {
+                logoutAdmin();
+            }
+
             const modal = document.getElementById('adminModal');
             if (modal) modal.classList.remove('hidden');
 
@@ -1219,24 +1584,85 @@
             if (modal) modal.classList.add('hidden');
         }
 
-        function verifyAdminPassword() {
+        function restoreAdminSession() {
+            const expiresAt = Number(sessionStorage.getItem(ADMIN_SESSION_KEY));
+            if (!expiresAt || expiresAt <= Date.now()) {
+                sessionStorage.removeItem(ADMIN_SESSION_KEY);
+                return;
+            }
+
+            isAdminLoggedIn = true;
+            adminSessionTimeout = window.setTimeout(logoutAdmin, expiresAt - Date.now());
+        }
+
+        function isFirebaseAdminUser(user = firebase.auth().currentUser) {
+            return user?.email?.toLowerCase() === ADMIN_DELIVERY_EMAIL
+                && user.providerData?.some(provider => provider.providerId === 'password');
+        }
+
+        function requireFirebaseAdmin() {
+            if (isFirebaseAdminUser()) return true;
+            showToast("Connectez-vous avec le mot de passe Admin pour modifier ces informations.");
+            return false;
+        }
+
+        async function verifyAdminPassword() {
             const input = document.getElementById('adminPinInput').value;
-            if (input === adminPassword) {
+            if (!input) {
+                showToast("Saisissez le mot de passe administrateur.");
+                return;
+            }
+            if (!cloudDb) {
+                showToast("Connexion Firebase indisponible ; réessayez plus tard.");
+                return;
+            }
+
+            try {
+                const credential = await firebase.auth().signInWithEmailAndPassword(ADMIN_DELIVERY_EMAIL, input);
+                if (!isFirebaseAdminUser(credential.user)) {
+                    await firebase.auth().signOut();
+                    showToast("Ce compte n’est pas autorisé pour l’administration.");
+                    return;
+                }
+
+                adminPassword = input;
+                localStorage.removeItem('oumy_admin_pass');
                 isAdminLoggedIn = true;
+                const expiresAt = Date.now() + ADMIN_SESSION_DURATION_MS;
+                sessionStorage.setItem(ADMIN_SESSION_KEY, String(expiresAt));
+                window.clearTimeout(adminSessionTimeout);
+                adminSessionTimeout = window.setTimeout(logoutAdmin, ADMIN_SESSION_DURATION_MS);
                 document.getElementById('adminPinScreen').classList.add('hidden');
                 document.getElementById('adminDashboard').classList.remove('hidden');
                 renderAdminProductsTable();
+                document.getElementById('adminPinInput').value = '';
                 showToast("Connexion Admin réussie !");
-            } else {
-                showToast("Mot de passe incorrect !");
+            } catch (error) {
+                if (error.code === 'auth/operation-not-allowed') {
+                    showToast("Activez la connexion e-mail/mot de passe dans Firebase Authentication.");
+                } else if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+                    showToast("Mot de passe incorrect ou compte admin non configuré.");
+                } else {
+                    showToast("Connexion impossible. Vérifiez le réseau et réessayez.");
+                }
             }
         }
 
         function logoutAdmin() {
+            if (cloudOrdersUnsubscribe) {
+                cloudOrdersUnsubscribe();
+                cloudOrdersUnsubscribe = null;
+            }
+            window.clearTimeout(adminSessionTimeout);
+            adminSessionTimeout = null;
+            sessionStorage.removeItem(ADMIN_SESSION_KEY);
             isAdminLoggedIn = false;
             document.getElementById('adminDashboard').classList.add('hidden');
             document.getElementById('adminPinScreen').classList.remove('hidden');
             document.getElementById('adminPinInput').value = '';
+            if (firebase.apps.length && firebase.auth().currentUser?.email?.toLowerCase() === ADMIN_DELIVERY_EMAIL) {
+                firebase.auth().signOut().catch(() => {});
+            }
         }
 
         function switchAdminTab(tab) {
@@ -1255,9 +1681,15 @@
             } else if (tab === 'orders') {
                 document.getElementById('adminTabOrders').classList.remove('hidden');
                 renderAdminOrders();
+                loadAdminOrdersFromCloud();
+            } else if (tab === 'preparations') {
+                document.getElementById('adminTabPreparations').classList.remove('hidden');
+                renderDailyPreparation();
+                loadAdminOrdersFromCloud();
             } else if (tab === 'settings') {
                 document.getElementById('adminTabSettings').classList.remove('hidden');
                 document.getElementById('settingPhone').value = oumyPhone;
+                renderDeliveryZonesAdmin();
             }
         }
 
@@ -1274,7 +1706,7 @@
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2 min-w-0 flex-1">
                             <label class="relative w-10 h-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 cursor-pointer group" title="Cliquer pour choisir une photo">
-                                <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-full h-full object-cover">
+                                <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-full h-full object-contain bg-slate-50 p-1">
                                 <span class="absolute inset-0 hidden group-hover:flex items-center justify-center bg-slate-950/60 text-white text-[10px]"><i class="fa-solid fa-camera"></i></span>
                                 <input type="file" accept="image/*" class="hidden" onchange="handleProductImageFile('${p.id}', this)">
                             </label>
@@ -1301,11 +1733,6 @@
                             <input type="number" value="${p.price}" onchange="updateProductPrice('${p.id}', this.value)" class="w-20 px-2 py-1 text-xs font-bold border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
                             <span class="text-[10px] font-bold text-slate-600">FCFA</span>
                         </div>
-                    </div>
-
-                    <div class="pt-2 border-t border-slate-100 space-y-1">
-                        <label class="text-[10px] font-bold text-slate-500 uppercase">URL de la photo :</label>
-                        <input type="url" value="${(p.image || '').replace(/"/g, '&quot;')}" onchange="updateProductImage('${p.id}', this.value)" class="w-full px-2 py-1 text-xs border border-slate-300 rounded-lg outline-none focus:border-oumy-green" placeholder="https://.../photo.jpg">
                     </div>
 
                     ${isPack ? `
@@ -1344,48 +1771,74 @@
             }
         }
 
-        function updateProductImage(id, newImage) {
-            const index = productsList.findIndex(p => p.id === id);
-            if (index > -1) {
-                productsList[index].image = newImage.trim() || FALLBACK_IMAGE;
-                saveLocalProducts();
-                renderAdminProductsTable();
-                renderProducts();
-                showToast("Photo du produit mise à jour !");
+        async function processProductImageFile(file) {
+            if (!file.type.startsWith('image/')) {
+                throw new Error('invalid-image-type');
             }
+
+            const source = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('image-read-failed'));
+                reader.readAsDataURL(file);
+            });
+            const selectedImage = await new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error('invalid-image-file'));
+                image.src = source;
+            });
+
+            const maxSize = 900;
+            const scale = Math.min(1, maxSize / Math.max(selectedImage.width, selectedImage.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(selectedImage.width * scale);
+            canvas.height = Math.round(selectedImage.height * scale);
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('image-canvas-unavailable');
+            context.drawImage(selectedImage, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.82);
         }
 
-        function handleProductImageFile(id, input) {
+        function previewNewProductImage(input) {
+            const file = input.files?.[0];
+            const preview = document.getElementById('newProdImagePreview');
+            const previewImage = document.getElementById('newProdImagePreviewImg');
+            const previewName = document.getElementById('newProdImagePreviewName');
+
+            if (newProductPreviewUrl) URL.revokeObjectURL(newProductPreviewUrl);
+            newProductPreviewUrl = '';
+            preview.classList.add('hidden');
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                input.value = '';
+                showToast("Veuillez sélectionner une image.");
+                return;
+            }
+
+            newProductPreviewUrl = URL.createObjectURL(file);
+            previewImage.src = newProductPreviewUrl;
+            previewName.textContent = file.name;
+            preview.classList.remove('hidden');
+        }
+
+        async function handleProductImageFile(id, input) {
             const file = input.files?.[0];
             const index = productsList.findIndex(p => p.id === id);
             if (!file || index < 0) return;
 
-            if (!file.type.startsWith('image/')) {
-                showToast("Veuillez sélectionner une image.");
+            try {
+                productsList[index].image = await processProductImageFile(file);
+                productsList[index].imageOverride = true;
+                saveLocalProducts();
+                renderAdminProductsTable();
+                renderProducts();
+                showToast(cloudDb ? "Photo synchronisée pour tous les appareils !" : "Photo enregistrée sur cet appareil.");
+            } catch (error) {
+                showToast("Impossible de lire cette image. Choisissez un autre fichier.");
+            } finally {
                 input.value = '';
-                return;
             }
-
-            const reader = new FileReader();
-            reader.onload = event => {
-                const selectedImage = new Image();
-                selectedImage.onload = () => {
-                    const maxSize = 900;
-                    const scale = Math.min(1, maxSize / Math.max(selectedImage.width, selectedImage.height));
-                    const canvas = document.createElement('canvas');
-                    canvas.width = Math.round(selectedImage.width * scale);
-                    canvas.height = Math.round(selectedImage.height * scale);
-                    canvas.getContext('2d').drawImage(selectedImage, 0, 0, canvas.width, canvas.height);
-                    const localPreview = canvas.toDataURL('image/jpeg', 0.82);
-                    productsList[index].image = localPreview;
-                    saveLocalProducts();
-                    renderAdminProductsTable();
-                    renderProducts();
-                    showToast(cloudDb ? "Photo synchronisée pour tous les appareils !" : "Photo enregistrée sur cet appareil.");
-                };
-                selectedImage.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
         }
 
         function updateProductPrice(id, newPrice) {
@@ -1407,25 +1860,38 @@
         }
 
         function deleteProduct(id) {
-            if (confirm("Supprimer ce produit du catalogue ?")) {
+            const product = productsList.find(item => item.id === id);
+            if (!product) return;
+
+            if (confirm(`Supprimer « ${product.name} » du catalogue ? Cette action est définitive.`)) {
                 productsList = productsList.filter(p => p.id !== id);
-                saveLocalProducts();
+                saveLocalProducts([id]);
                 renderAdminProductsTable();
                 renderProducts();
             }
         }
 
-        function addNewProduct() {
+        async function addNewProduct() {
             const name = document.getElementById('newProdName').value.trim();
             const cat = document.getElementById('newProdCat').value;
             const price = parseFloat(document.getElementById('newProdPrice').value) || 0;
             const unit = document.getElementById('newProdUnit').value.trim() || 'unité';
-            const image = document.getElementById('newProdImage').value.trim() || FALLBACK_IMAGE;
+            const imageFile = document.getElementById('newProdImageFile').files?.[0];
             const composition = document.getElementById('newProdComposition').value.trim();
 
             if (!name || price <= 0) {
                 showToast("Veuillez saisir un nom et un prix valides.");
                 return;
+            }
+
+            let image = FALLBACK_IMAGE;
+            if (imageFile) {
+                try {
+                    image = await processProductImageFile(imageFile);
+                } catch (error) {
+                    showToast("Impossible de lire cette image. Choisissez un autre fichier.");
+                    return;
+                }
             }
 
             let badgeName = 'Frais';
@@ -1455,8 +1921,11 @@
             // Clear inputs
             document.getElementById('newProdName').value = '';
             document.getElementById('newProdPrice').value = '';
-            document.getElementById('newProdImage').value = '';
+            document.getElementById('newProdImageFile').value = '';
             document.getElementById('newProdComposition').value = '';
+            document.getElementById('newProdImagePreview').classList.add('hidden');
+            if (newProductPreviewUrl) URL.revokeObjectURL(newProductPreviewUrl);
+            newProductPreviewUrl = '';
 
             showToast("Produit / Pack ajouté avec succès !");
         }
@@ -1525,7 +1994,7 @@
                 <div class="p-2.5 rounded-xl border ${sel.selected ? 'border-oumy-green bg-teal-50/80' : 'border-slate-200 bg-white'} flex items-center justify-between gap-2">
                     <div class="flex items-center gap-2 min-w-0 flex-1">
                         <input type="checkbox" id="chk-comp-${item.id}" ${sel.selected ? 'checked' : ''} onchange="toggleComposerItem('${item.id}')" class="w-4 h-4 rounded text-oumy-green focus:ring-oumy-green shrink-0 cursor-pointer">
-                        <img src="${item.image || FALLBACK_IMAGE}" alt="${item.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-9 h-9 object-cover rounded-lg border border-slate-200 shrink-0">
+                        <img src="${item.image || FALLBACK_IMAGE}" alt="${item.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="w-9 h-9 object-contain bg-slate-50 p-1 rounded-lg border border-slate-200 shrink-0">
                         <div class="min-w-0 flex-1">
                             <label for="chk-comp-${item.id}" class="font-bold text-xs text-slate-900 block truncate cursor-pointer">${item.name}</label>
                             <span class="text-[10px] text-slate-500 font-medium">${item.price} FCFA / ${item.unit || 'unité'}</span>
@@ -1606,6 +2075,106 @@
             showToast("Composition mise à jour !");
         }
 
+        function getOrderTimestamp(order) {
+            const createdAt = order.createdAt;
+            if (createdAt && typeof createdAt.toDate === 'function') return createdAt.toDate().getTime();
+            if (Number.isFinite(Number(createdAt?.seconds))) return Number(createdAt.seconds) * 1000;
+
+            const idMatch = String(order.id || '').match(/^ORD-(\d+)/);
+            if (idMatch) return Number(idMatch[1]);
+
+            const dateMatch = String(order.date || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+            if (!dateMatch) return null;
+            const [, day, month, year, hour = '0', minute = '0', second = '0'] = dateMatch;
+            return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)).getTime();
+        }
+
+        async function loadAdminOrdersFromCloud() {
+            if (!cloudDb) {
+                showToast("Connexion Firebase indisponible ; commandes partagées non chargées.");
+                return;
+            }
+
+            try {
+                if (!requireFirebaseAdmin()) return;
+                if (cloudOrdersUnsubscribe) return;
+
+                cloudOrdersUnsubscribe = cloudDb.collection('orders').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                    const ordersById = new Map(ordersHistory.map(order => [order.id, order]));
+                    snapshot.docs.forEach(document => {
+                        const order = document.data();
+                        const orderId = order.id || document.id;
+                        ordersById.set(orderId, { ...order, id: orderId });
+                    });
+                    ordersHistory = [...ordersById.values()].sort((firstOrder, secondOrder) =>
+                        (getOrderTimestamp(secondOrder) ?? 0) - (getOrderTimestamp(firstOrder) ?? 0)
+                    );
+                    try { localStorage.setItem('oumy_orders', JSON.stringify(ordersHistory)); } catch (error) { }
+                    renderAdminOrders();
+                    renderDailyPreparation();
+                }, () => showToast("Impossible de charger les commandes partagées."));
+            } catch (error) {
+                showToast("Impossible de charger les commandes. Vérifiez la connexion et le compte admin.");
+            }
+        }
+
+        function renderDailyPreparation() {
+            const container = document.getElementById('adminDailyPreparation');
+            if (!container) return;
+            if (ordersHistory.length === 0) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>`;
+                return;
+            }
+
+            const groups = new Map();
+            const sortedOrders = [...ordersHistory].sort((firstOrder, secondOrder) =>
+                (getOrderTimestamp(secondOrder) ?? 0) - (getOrderTimestamp(firstOrder) ?? 0)
+            );
+            sortedOrders.forEach(order => {
+                const timestamp = getOrderTimestamp(order);
+                const orderDate = timestamp === null ? null : new Date(timestamp);
+                const dayKey = orderDate
+                    ? `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}-${String(orderDate.getDate()).padStart(2, '0')}`
+                    : 'unknown-date';
+                if (!groups.has(dayKey)) {
+                    groups.set(dayKey, {
+                        label: orderDate
+                            ? orderDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                            : 'Date non renseignée',
+                        orderCount: 0,
+                        products: new Map()
+                    });
+                }
+
+                const group = groups.get(dayKey);
+                group.orderCount += 1;
+                (Array.isArray(order.items) ? order.items : []).forEach(item => {
+                    const quantity = Number(item.qty) || 0;
+                    if (quantity <= 0) return;
+                    const unit = item.unit || 'unité';
+                    const productKey = `${item.id || item.name}::${unit}`;
+                    const current = group.products.get(productKey) || { name: item.name || 'Article', unit, quantity: 0 };
+                    current.quantity += quantity;
+                    group.products.set(productKey, current);
+                });
+            });
+
+            container.innerHTML = [...groups.values()].map(group => `
+                <section class="space-y-2">
+                    <div class="flex items-baseline justify-between gap-2 border-b border-slate-200 pb-1">
+                        <h5 class="text-xs font-extrabold text-slate-800 capitalize">${group.label}</h5>
+                        <span class="text-[10px] text-slate-500">${group.orderCount} commande${group.orderCount > 1 ? 's' : ''}</span>
+                    </div>
+                    ${group.products.size ? [...group.products.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(product => `
+                        <div class="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
+                            <span class="min-w-0 truncate text-slate-700">${escapeDeliveryHtml(product.name)}</span>
+                            <span class="shrink-0 font-extrabold text-oumy-green">${formatQuantity(product.quantity)} ${escapeDeliveryHtml(product.unit)}</span>
+                        </div>
+                    `).join('') : '<p class="text-[10px] text-slate-400 py-2">Aucun article dans les commandes de cette journée.</p>'}
+                </section>
+            `).join('');
+        }
+
         // --- RENDER ADMIN ORDERS & CSV EXPORT ---
         function renderAdminOrders() {
             const container = document.getElementById('adminOrdersList');
@@ -1616,17 +2185,46 @@
                 return;
             }
 
-            container.innerHTML = ordersHistory.map(ord => `
-                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-                    <div class="flex items-center justify-between font-bold text-slate-900">
-                        <span>${ord.id} — ${ord.customer.name}</span>
-                        <span class="text-oumy-green">${ord.total.toLocaleString()} FCFA</span>
+            const sortOrder = document.getElementById('ordersSortOrder')?.value || 'newest';
+            const sortedOrders = [...ordersHistory].sort((firstOrder, secondOrder) => {
+                const difference = (getOrderTimestamp(firstOrder) ?? 0) - (getOrderTimestamp(secondOrder) ?? 0);
+                return sortOrder === 'oldest' ? difference : -difference;
+            });
+            const orderGroups = new Map();
+            sortedOrders.forEach(order => {
+                const timestamp = getOrderTimestamp(order);
+                const orderDate = timestamp === null ? null : new Date(timestamp);
+                const dayKey = orderDate
+                    ? `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}-${String(orderDate.getDate()).padStart(2, '0')}`
+                    : 'unknown-date';
+                if (!orderGroups.has(dayKey)) {
+                    orderGroups.set(dayKey, {
+                        label: orderDate
+                            ? orderDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                            : 'Date non renseignée',
+                        orders: []
+                    });
+                }
+                orderGroups.get(dayKey).orders.push(order);
+            });
+
+            container.innerHTML = [...orderGroups.values()].map(group => `
+                <section class="space-y-2">
+                    <h5 class="pt-3 pb-1 border-b border-slate-200 text-[11px] font-extrabold text-slate-600 capitalize">${group.label}</h5>
+                    ${group.orders.map(ord => `
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                        <div class="flex items-center justify-between font-bold text-slate-900">
+                            <span>${ord.id} — ${ord.customer.name}</span>
+                            <span class="text-oumy-green">${ord.total.toLocaleString()} FCFA</span>
+                        </div>
+                        <p class="text-slate-500 text-[10px]">Date et heure : ${ord.date || 'Non renseignées'}</p>
+                        <p class="text-slate-500 text-[10px]">📍 ${ord.customer.address} | 📞 ${ord.customer.phone}</p>
+                        <div class="text-[11px] text-slate-700 bg-white p-2 rounded-lg border border-slate-100">
+                            ${ord.items.map(i => `${formatOrderItemQuantity(i)} ${i.name}`).join(', ')}
+                        </div>
                     </div>
-                    <p class="text-slate-500 text-[10px]">📍 ${ord.customer.address} | 📞 ${ord.customer.phone}</p>
-                    <div class="text-[11px] text-slate-700 bg-white p-2 rounded-lg border border-slate-100">
-                        ${ord.items.map(i => `${i.qty}x ${i.name}`).join(', ')}
-                    </div>
-                </div>
+                    `).join('')}
+                </section>
             `).join('');
         }
 
@@ -1636,38 +2234,123 @@
                 return;
             }
 
-            let csv = "ID,Date,Client,Telephone,Adresse,Total FCFA\n";
-            ordersHistory.forEach(o => {
-                csv += `"${o.id}","${o.date}","${o.customer.name}","${o.customer.phone}","${o.customer.address}","${o.total}"\n`;
-            });
+            const headers = [
+                "N° commande",
+                "Date et heure",
+                "Client",
+                "Téléphone",
+                "Adresse",
+                "Zone de livraison",
+                "Articles commandés",
+                "Nombre de produits",
+                "Sous-total produits (FCFA)",
+                "Frais de livraison (FCFA)",
+                "Total commande (FCFA)"
+            ];
+            const escapeCell = value => {
+                const text = String(value ?? '');
+                const safeText = /^[\t\r ]*[=+\-@]/.test(text) ? `'${text}` : text;
+                return `"${safeText.replace(/"/g, '""')}"`;
+            };
+            const formatAmount = amount => (Number(amount) || 0).toLocaleString('fr-FR');
+            const rows = ordersHistory.map(order => {
+                const items = Array.isArray(order.items) ? order.items : [];
+                const subtotal = Number(order.subtotal) || items.reduce((total, item) => total + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+                const deliveryFee = Number(order.fee) || 0;
+                const total = Number(order.total) || subtotal + deliveryFee;
+                const itemsDescription = items.map(item => {
+                    const quantity = Number(item.qty) || 0;
+                    const unitPrice = Number(item.price) || 0;
+                    return `${formatOrderItemQuantity(item)} ${item.name || 'Article'} (${formatAmount(unitPrice)} FCFA/${item.unit || 'unité'}, ${formatAmount(unitPrice * quantity)} FCFA)`;
+                }).join(' | ');
 
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                return [
+                    order.id,
+                    order.date,
+                    order.customer?.name,
+                    order.customer?.phone,
+                    order.customer?.address,
+                    order.customer?.zone,
+                    itemsDescription,
+                    items.length,
+                    subtotal,
+                    deliveryFee,
+                    total
+                ];
+            });
+            const csv = [headers, ...rows].map(row => row.map(escapeCell).join(';')).join('\r\n');
+            const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", `Commandes_OumysFarm_${Date.now()}.csv`);
+            link.setAttribute("download", `Commandes_OumysFarm_${new Date().toISOString().slice(0, 10)}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
         }
 
-        function saveSettingsPhone() {
-            const phone = document.getElementById('settingPhone').value.trim();
-            if (phone) {
+        async function saveSettingsPhone() {
+            const phoneInput = document.getElementById('settingPhone');
+            const phone = phoneInput.value.replace(/\D/g, '');
+            if (!/^\d{8,15}$/.test(phone)) {
+                showToast("Saisissez un numéro WhatsApp valide avec son indicatif pays.");
+                return;
+            }
+            if (!cloudDb) {
+                showToast("Connexion Firebase indisponible ; numéro non enregistré.");
+                return;
+            }
+
+            try {
+                if (!requireFirebaseAdmin()) return;
+
+                await cloudDb.collection('siteSettings').doc('whatsapp').set({
+                    phone,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
                 oumyPhone = phone;
                 localStorage.setItem('oumy_phone', phone);
-                showToast("Numéro WhatsApp enregistré !");
+                phoneInput.value = phone;
+                showToast("Numéro WhatsApp partagé enregistré !");
+            } catch (error) {
+                if (error.code === 'auth/operation-not-allowed') {
+                    showToast("Activez e-mail/mot de passe dans Firebase Authentication.");
+                } else if (error.code === 'permission-denied') {
+                    showToast("Seul le compte administrateur peut enregistrer le numéro.");
+                } else {
+                    showToast("Impossible d’enregistrer le numéro. Vérifiez la connexion et le compte admin.");
+                }
             }
         }
 
-        function saveNewAdminPassword() {
+        async function saveNewAdminPassword() {
             const pass = document.getElementById('settingNewPass').value.trim();
             if (pass.length < 8 || !/\d/.test(pass) || !/[!@#$%^&*(),.?":{}|<>]/?.test(pass)) {
                 showToast("Min. 8 caractères avec au moins 1 chiffre et 1 caractère spécial.");
                 return;
             }
-            adminPassword = pass;
-            localStorage.setItem('oumy_admin_pass', pass);
-            showToast("Mot de passe Admin mis à jour !");
+            const user = firebase.auth().currentUser;
+            if (!isFirebaseAdminUser(user)) {
+                showToast("Connectez-vous avec le mot de passe Admin pour le modifier.");
+                return;
+            }
+
+            try {
+                if (adminPassword) {
+                    const credential = firebase.auth.EmailAuthProvider.credential(ADMIN_DELIVERY_EMAIL, adminPassword);
+                    await user.reauthenticateWithCredential(credential);
+                }
+                await user.updatePassword(pass);
+                adminPassword = pass;
+                document.getElementById('settingNewPass').value = '';
+                showToast("Mot de passe admin partagé mis à jour !");
+            } catch (error) {
+                if (error.code === 'auth/requires-recent-login') {
+                    showToast("Reconnectez-vous avec le mot de passe actuel avant de le changer.");
+                } else {
+                    showToast("Impossible de changer le mot de passe. Vérifiez la configuration Firebase.");
+                }
+            }
         }
 
         function showToast(msg) {
