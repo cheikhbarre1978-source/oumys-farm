@@ -433,6 +433,9 @@
                                 <option value="30" selected>30 derniers jours</option>
                                 <option value="all">Depuis le début</option>
                             </select>
+                            <button type="button" onclick="exportStatsToCSV()" class="px-2.5 py-1 bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-file-excel"></i> Exporter en CSV
+                            </button>
                         </div>
                     </div>
                     <div id="adminStats" class="space-y-3 text-xs">
@@ -2208,6 +2211,54 @@
                 </div>`;
         }
 
+        let lastStats = null;
+
+        function exportStatsToCSV() {
+            renderAdminStats();
+            if (!lastStats) {
+                showToast("Aucune statistique à exporter sur cette période.");
+                return;
+            }
+            const escapeCell = value => {
+                const text = String(value ?? '');
+                const safeText = /^[\t\r ]*[=+\-@]/.test(text) ? `'${text}` : text;
+                return `"${safeText.replace(/"/g, '""')}"`;
+            };
+            const stats = lastStats;
+            const rows = [
+                ["Statistiques Oumy's Farm"],
+                ['Période', stats.periodLabel],
+                ['Édité le', new Date().toLocaleString('fr-FR')],
+                [],
+                ['Indicateur', 'Valeur'],
+                ['Commandes', stats.orderCount],
+                ["Chiffre d'affaires (FCFA)", stats.revenue],
+                ['Panier moyen (FCFA)', stats.averageBasket],
+                ['Clients différents', stats.customerCount],
+                [],
+                ['Commandes par jour'],
+                ['Date', 'Commandes', "Chiffre d'affaires (FCFA)"],
+                ...stats.perDay.map(day => [day.date, day.count, day.revenue]),
+                [],
+                ['Produits vendus'],
+                ['Produit', 'Quantité', 'Unité', "Chiffre d'affaires (FCFA)"],
+                ...stats.products.map(product => [product.name, String(product.quantity).replace('.', ','), product.unit, product.revenue]),
+                [],
+                ['Zones de livraison'],
+                ['Zone', 'Commandes', "Chiffre d'affaires (FCFA)"],
+                ...stats.zones.map(zone => [zone.name, zone.count, zone.revenue])
+            ];
+            const csv = rows.map(row => row.map(escapeCell).join(';')).join('\r\n');
+            const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', `Statistiques_OumysFarm_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+        }
+
         function renderAdminStats() {
             const container = document.getElementById('adminStats');
             if (!container) return;
@@ -2219,6 +2270,7 @@
             const orders = ordersHistory.filter(order => (getOrderTimestamp(order) ?? 0) >= since);
 
             if (orders.length === 0) {
+                lastStats = null;
                 container.innerHTML = `<p class="text-center text-slate-400 py-6">Aucune commande sur cette période.</p>`;
                 return;
             }
@@ -2281,6 +2333,24 @@
                 zones.set(zone, current);
             });
             const topZones = [...zones.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+
+            lastStats = {
+                periodLabel: document.getElementById('statsPeriod')?.selectedOptions[0]?.textContent || period,
+                orderCount: orders.length,
+                revenue,
+                averageBasket: Math.round(revenue / orders.length),
+                customerCount: customers.size,
+                perDay: [...perDay.values()].map(entry => ({
+                    date: entry.day.toLocaleDateString('fr-FR'),
+                    count: entry.count,
+                    revenue: entry.revenue
+                })),
+                products: [...products.values()].sort((a, b) => b.revenue - a.revenue).map(product => ({
+                    ...product,
+                    quantity: Math.round(product.quantity * 1000) / 1000
+                })),
+                zones: [...zones.entries()].sort((a, b) => b[1].count - a[1].count).map(([name, data]) => ({ name, ...data }))
+            };
 
             container.innerHTML = `
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
