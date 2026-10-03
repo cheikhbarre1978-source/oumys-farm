@@ -1180,8 +1180,12 @@
                     </div>
 
                     <!-- Action Button -->
-                    <div class="p-3.5 pt-0">
-                        <button type="button" onclick="addToCart('${p.id}')" ${isOutOfStock ? 'disabled' : ''} class="w-full py-2 px-3 ${isOutOfStock ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-oumy-green hover:bg-teal-800 text-white active:scale-98'} font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all">
+                    <div class="p-3.5 pt-0 space-y-2">
+                        ${isPortionProduct(p) && !isOutOfStock ? `
+                        <div class="flex gap-1" role="group" aria-label="Quantité">
+                            ${PORTION_CHOICES.map(choice => `<button type="button" onclick="selectPortion('${p.id}', ${choice.qty})" aria-pressed="${(portionChoice[p.id] || 1) === choice.qty}" class="flex-1 py-1 rounded-lg text-[10px] font-bold border ${(portionChoice[p.id] || 1) === choice.qty ? 'bg-amber-400 border-amber-400 text-slate-950' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">${choice.label}</button>`).join('')}
+                        </div>` : ''}
+                        <button type="button" onclick="addToCart('${p.id}'${isPortionProduct(p) ? `, ${portionChoice[p.id] || 1}` : ''})" ${isOutOfStock ? 'disabled' : ''} class="w-full py-2 px-3 ${isOutOfStock ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-oumy-green hover:bg-teal-800 text-white active:scale-98'} font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all">
                             <i class="fa-solid fa-cart-plus text-amber-300"></i>
                             <span>${isOutOfStock ? 'Rupture de Stock' : 'Ajouter au Panier'}</span>
                         </button>
@@ -1215,40 +1219,77 @@
             return item.category === 'legumes' && item.unit?.trim().toLowerCase() === 'kg';
         }
 
+        // Produits vendables au détail dès 125 g (quantités exprimées en kg dans le panier)
+        const PORTION_PRODUCT_IDS = new Set([
+            'piment-sofia', 'piment-goana', 'piment-thioukouli-vert', 'piment-vert-jaune-rouge',
+            'poivron-vert-simba', 'betteraves'
+        ]);
+        const PORTION_CHOICES = [
+            { qty: 0.125, label: '125 g' },
+            { qty: 0.25, label: '250 g' },
+            { qty: 0.5, label: '500 g' },
+            { qty: 1, label: '1 kg' }
+        ];
+        let portionChoice = {};
+
+        function isPortionProduct(item) {
+            return PORTION_PRODUCT_IDS.has(item.id) && isHalfKiloVegetable(item);
+        }
+
+        function selectPortion(productId, qty) {
+            portionChoice[productId] = qty;
+            renderProducts();
+        }
+
+        function lineTotal(item) {
+            return Math.round(item.price * item.qty);
+        }
+
+        function cartStep(item, direction) {
+            if (!isHalfKiloVegetable(item)) return 1;
+            if (!isPortionProduct(item)) return 0.5;
+            const boundary = direction > 0 ? item.qty < 1 : item.qty <= 1;
+            return boundary ? 0.125 : 0.5;
+        }
+
         function formatQuantity(quantity) {
-            return (Number(quantity) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+            return (Number(quantity) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 3 });
+        }
+
+        function formatKgQuantity(item) {
+            const qty = Number(item.qty) || 0;
+            if (PORTION_PRODUCT_IDS.has(item.id) && qty < 1) return `${Math.round(qty * 1000)} g`;
+            return `${formatQuantity(qty)} kg`;
         }
 
         function formatCartQuantity(item) {
-            const quantity = formatQuantity(item.qty);
-            return isHalfKiloVegetable(item) ? `${quantity} kg` : quantity;
+            return isHalfKiloVegetable(item) ? formatKgQuantity(item) : formatQuantity(item.qty);
         }
 
         function formatOrderItemQuantity(item) {
-            const quantity = formatQuantity(item.qty);
-            return isHalfKiloVegetable(item) ? `${quantity} kg` : `${quantity}x`;
+            return isHalfKiloVegetable(item) ? formatKgQuantity(item) : `${formatQuantity(item.qty)}x`;
         }
 
-        function addToCart(productId) {
+        function addToCart(productId, qty = 1) {
             const item = productsList.find(p => p.id === productId);
             if (!item || item.inStock === false) return;
 
             const existing = cartItems.find(c => c.id === productId);
             if (existing) {
-                existing.qty += 1;
+                existing.qty = Math.round((existing.qty + qty) * 8) / 8;
             } else {
-                cartItems.push({ ...item, qty: 1 });
+                cartItems.push({ ...item, qty });
             }
 
             updateCartUI();
             showToast(`"${item.name}" ajouté au panier !`);
         }
 
-        function updateCartQty(productId, delta) {
+        function updateCartQty(productId, direction) {
             const item = cartItems.find(c => c.id === productId);
             if (!item) return;
 
-            const nextQuantity = Math.round((item.qty + delta) * 2) / 2;
+            const nextQuantity = Math.round((item.qty + direction * cartStep(item, direction)) * 8) / 8;
             if (nextQuantity <= 0) {
                 cartItems = cartItems.filter(c => c.id !== productId);
             } else {
@@ -1269,7 +1310,7 @@
             const subtotalEl = document.getElementById('cartSubtotal');
 
             const totalQty = cartItems.reduce((acc, c) => acc + c.qty, 0);
-            const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
+            const subtotal = cartItems.reduce((acc, c) => acc + lineTotal(c), 0);
 
             if (badge) badge.textContent = formatQuantity(totalQty);
             if (subtotalEl) subtotalEl.textContent = `${subtotal.toLocaleString()} FCFA`;
@@ -1293,14 +1334,14 @@
                             <h4 class="font-bold text-slate-900 truncate">${c.name}</h4>
                             <span class="text-[10px] text-slate-500 font-medium">${c.price.toLocaleString()} FCFA / ${c.unit || 'unité'}</span>
                         </div>
-                        <span class="cart-line-total font-extrabold text-oumy-green text-xs shrink-0">${(c.price * c.qty).toLocaleString()} FCFA</span>
+                        <span class="cart-line-total font-extrabold text-oumy-green text-xs shrink-0">${lineTotal(c).toLocaleString()} FCFA</span>
                     </div>
 
                     <div class="flex items-center justify-end gap-2">
                         <div class="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
-                            <button type="button" onclick="updateCartQty('${c.id}', -${isHalfKiloVegetable(c) ? 0.5 : 1})" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">-</button>
+                            <button type="button" onclick="updateCartQty('${c.id}', -1)" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">-</button>
                             <span class="px-2 font-extrabold text-slate-900 text-xs">${formatCartQuantity(c)}</span>
-                            <button type="button" onclick="updateCartQty('${c.id}', ${isHalfKiloVegetable(c) ? 0.5 : 1})" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">+</button>
+                            <button type="button" onclick="updateCartQty('${c.id}', 1)" class="px-2 py-0.5 hover:bg-slate-200 text-slate-700 font-bold">+</button>
                         </div>
                         <button type="button" onclick="removeCartItem('${c.id}')" aria-label="Supprimer ${c.name} du panier" title="Supprimer l’article" class="w-8 h-8 inline-flex items-center justify-center text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
                             <i class="fa-solid fa-trash" aria-hidden="true"></i>
@@ -1454,7 +1495,7 @@
 
         function updateDeliveryFeeCalc() {
             const zoneSelect = document.getElementById('deliveryZoneSelect');
-            const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
+            const subtotal = cartItems.reduce((acc, c) => acc + lineTotal(c), 0);
             const fee = deliveryZones.find(zone => zone.id === zoneSelect.value)?.fee || 0;
 
             document.getElementById('summarySubtotal').textContent = `${subtotal.toLocaleString()} FCFA`;
@@ -1480,7 +1521,7 @@
             const zoneSelect = document.getElementById('deliveryZoneSelect');
             const zoneText = zoneSelect.options[zoneSelect.selectedIndex].text;
 
-            const subtotal = cartItems.reduce((acc, c) => acc + (c.price * c.qty), 0);
+            const subtotal = cartItems.reduce((acc, c) => acc + lineTotal(c), 0);
             const fee = deliveryZones.find(zone => zone.id === zoneSelect.value)?.fee || 0;
 
             const total = subtotal + fee;
@@ -1494,7 +1535,7 @@
             msg += `🛒 *ARTICLES COMMANDÉS :*\n`;
 
             cartItems.forEach(item => {
-                msg += `- ${formatOrderItemQuantity(item)} ${item.name} (${(item.price * item.qty).toLocaleString()} FCFA)\n`;
+                msg += `- ${formatOrderItemQuantity(item)} ${item.name} (${lineTotal(item).toLocaleString()} FCFA)\n`;
             });
 
             msg += `\n-------------------------\n`;
@@ -2255,13 +2296,13 @@
             const formatAmount = amount => (Number(amount) || 0).toLocaleString('fr-FR');
             const rows = ordersHistory.map(order => {
                 const items = Array.isArray(order.items) ? order.items : [];
-                const subtotal = Number(order.subtotal) || items.reduce((total, item) => total + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+                const subtotal = Number(order.subtotal) || items.reduce((total, item) => total + Math.round((Number(item.price) || 0) * (Number(item.qty) || 0)), 0);
                 const deliveryFee = Number(order.fee) || 0;
                 const total = Number(order.total) || subtotal + deliveryFee;
                 const itemsDescription = items.map(item => {
                     const quantity = Number(item.qty) || 0;
                     const unitPrice = Number(item.price) || 0;
-                    return `${formatOrderItemQuantity(item)} ${item.name || 'Article'} (${formatAmount(unitPrice)} FCFA/${item.unit || 'unité'}, ${formatAmount(unitPrice * quantity)} FCFA)`;
+                    return `${formatOrderItemQuantity(item)} ${item.name || 'Article'} (${formatAmount(unitPrice)} FCFA/${item.unit || 'unité'}, ${formatAmount(Math.round(unitPrice * quantity))} FCFA)`;
                 }).join(' | ');
 
                 return [
