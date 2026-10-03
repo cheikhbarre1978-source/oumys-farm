@@ -2182,6 +2182,13 @@
                 </div>`;
         }
 
+        let selectedPreparationDay = null;
+
+        function selectPreparationDay(dayKey) {
+            selectedPreparationDay = dayKey;
+            renderDailyPreparation();
+        }
+
         function renderDailyPreparation() {
             const container = document.getElementById('adminDailyPreparation');
             if (!container) return;
@@ -2206,13 +2213,16 @@
                         label: orderDate
                             ? orderDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                             : 'Date non renseignée',
-                        orderCount: 0,
+                        shortLabel: orderDate
+                            ? orderDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+                            : 'Sans date',
+                        orders: [],
                         products: new Map()
                     });
                 }
 
                 const group = groups.get(dayKey);
-                group.orderCount += 1;
+                group.orders.push(order);
                 (Array.isArray(order.items) ? order.items : []).forEach(item => {
                     const quantity = Number(item.qty) || 0;
                     if (quantity <= 0) return;
@@ -2224,19 +2234,51 @@
                 });
             });
 
-            container.innerHTML = [...groups.values()].map(group => `
-                <section class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-2 space-y-2">
-                    ${dayBannerHtml(group, `${group.orderCount} commande${group.orderCount > 1 ? 's' : ''}`)}
-                    <div class="bg-white rounded-xl border border-slate-200 px-3 py-1">
-                    ${group.products.size ? [...group.products.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(product => `
-                        <div class="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
-                            <span class="min-w-0 truncate text-slate-700">${escapeDeliveryHtml(product.name)}</span>
-                            <span class="shrink-0 font-extrabold text-oumy-green">${formatQuantity(product.quantity)} ${escapeDeliveryHtml(product.unit)}</span>
-                        </div>
-                    `).join('') : '<p class="text-[10px] text-slate-400 py-2">Aucun article dans les commandes de cette journée.</p>'}
-                    </div>
-                </section>
+            if (!groups.has(selectedPreparationDay)) selectedPreparationDay = groups.keys().next().value;
+            const group = groups.get(selectedPreparationDay);
+
+            const dayChips = [...groups.values()].map(day => {
+                const active = day.dayKey === selectedPreparationDay;
+                const badge = relativeDayLabel(day.dayKey);
+                return `<button type="button" onclick="selectPreparationDay('${day.dayKey}')" aria-pressed="${active}" class="shrink-0 px-3 py-1.5 rounded-xl border-2 text-[11px] font-bold text-left leading-tight transition-colors ${active ? 'bg-oumy-green border-oumy-green text-white shadow-md' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">
+                    <span class="block capitalize">${badge || day.shortLabel}</span>
+                    <span class="block text-[9px] font-semibold ${active ? 'text-teal-100' : 'text-slate-500'}">${day.orders.length} commande${day.orders.length > 1 ? 's' : ''}</span>
+                </button>`;
+            }).join('');
+
+            const productRows = [...group.products.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(product => `
+                <div class="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
+                    <span class="min-w-0 truncate text-slate-700">${escapeDeliveryHtml(product.name)}</span>
+                    <span class="shrink-0 font-extrabold text-oumy-green">${formatQuantity(product.quantity)} ${escapeDeliveryHtml(product.unit)}</span>
+                </div>
             `).join('');
+
+            const orderRows = [...group.orders].reverse().map(ord => {
+                const items = Array.isArray(ord.items) ? ord.items : [];
+                return `
+                <div class="py-2 border-b border-slate-100 last:border-0 space-y-0.5">
+                    <div class="flex items-center justify-between gap-2 font-bold text-slate-800">
+                        <span class="min-w-0 break-words">${escapeDeliveryHtml(ord.customer?.name || 'Client')}</span>
+                        <span class="text-[10px] font-semibold text-slate-500 shrink-0">${escapeDeliveryHtml(ord.customer?.zone || '')}</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">📍 ${escapeDeliveryHtml(ord.customer?.address || '')} | 📞 ${escapeDeliveryHtml(ord.customer?.phone || '')}</p>
+                    <p class="text-[11px] text-slate-700">${items.map(i => `${escapeDeliveryHtml(formatOrderItemQuantity(i))} ${escapeDeliveryHtml(i.name)}`).join(', ')}</p>
+                </div>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar" role="group" aria-label="Choisir une journée">${dayChips}</div>
+                <section class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-2 space-y-2">
+                    ${dayBannerHtml(group, `${group.orders.length} commande${group.orders.length > 1 ? 's' : ''}`)}
+                    <div class="bg-white rounded-xl border border-slate-200 px-3 py-2">
+                        <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500 pb-1">À préparer ce jour</h6>
+                        ${productRows || '<p class="text-[10px] text-slate-400 py-2">Aucun article dans les commandes de cette journée.</p>'}
+                    </div>
+                    <div class="bg-white rounded-xl border border-slate-200 px-3 py-2">
+                        <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500 pb-1">Commandes du jour</h6>
+                        ${orderRows}
+                    </div>
+                </section>`;
         }
 
         // --- RENDER ADMIN ORDERS & CSV EXPORT ---
