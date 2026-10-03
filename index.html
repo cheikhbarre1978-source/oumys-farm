@@ -1180,12 +1180,8 @@
                     </div>
 
                     <!-- Action Button -->
-                    <div class="p-3.5 pt-0 space-y-2">
-                        ${isPortionProduct(p) && !isOutOfStock ? `
-                        <div class="flex gap-1" role="group" aria-label="Quantité">
-                            ${PORTION_CHOICES.map(choice => `<button type="button" onclick="selectPortion('${p.id}', ${choice.qty})" aria-pressed="${(portionChoice[p.id] || 1) === choice.qty}" class="flex-1 py-1 rounded-lg text-[10px] font-bold border ${(portionChoice[p.id] || 1) === choice.qty ? 'bg-amber-400 border-amber-400 text-slate-950' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">${choice.label}</button>`).join('')}
-                        </div>` : ''}
-                        <button type="button" onclick="addToCart('${p.id}'${isPortionProduct(p) ? `, ${portionChoice[p.id] || 1}` : ''})" ${isOutOfStock ? 'disabled' : ''} class="w-full py-2 px-3 ${isOutOfStock ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-oumy-green hover:bg-teal-800 text-white active:scale-98'} font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all">
+                    <div class="p-3.5 pt-0">
+                        <button type="button" onclick="addToCart('${p.id}')" ${isOutOfStock ? 'disabled' : ''} class="w-full py-2 px-3 ${isOutOfStock ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-oumy-green hover:bg-teal-800 text-white active:scale-98'} font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all">
                             <i class="fa-solid fa-cart-plus text-amber-300"></i>
                             <span>${isOutOfStock ? 'Rupture de Stock' : 'Ajouter au Panier'}</span>
                         </button>
@@ -1230,15 +1226,15 @@
             { qty: 0.5, label: '500 g' },
             { qty: 1, label: '1 kg' }
         ];
-        let portionChoice = {};
-
         function isPortionProduct(item) {
             return PORTION_PRODUCT_IDS.has(item.id) && isHalfKiloVegetable(item);
         }
 
-        function selectPortion(productId, qty) {
-            portionChoice[productId] = qty;
-            renderProducts();
+        function setCartPortion(productId, qty) {
+            const item = cartItems.find(c => c.id === productId);
+            if (!item) return;
+            item.qty = qty;
+            updateCartUI();
         }
 
         function lineTotal(item) {
@@ -1336,6 +1332,11 @@
                         </div>
                         <span class="cart-line-total font-extrabold text-oumy-green text-xs shrink-0">${lineTotal(c).toLocaleString()} FCFA</span>
                     </div>
+
+                    ${isPortionProduct(c) ? `
+                    <div class="flex gap-1" role="group" aria-label="Quantité de ${c.name}">
+                        ${PORTION_CHOICES.map(choice => `<button type="button" onclick="setCartPortion('${c.id}', ${choice.qty})" aria-pressed="${c.qty === choice.qty}" class="flex-1 py-1 rounded-lg text-[10px] font-bold border ${c.qty === choice.qty ? 'bg-amber-400 border-amber-400 text-slate-950' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">${choice.label}</button>`).join('')}
+                    </div>` : ''}
 
                     <div class="flex items-center justify-end gap-2">
                         <div class="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
