@@ -2160,6 +2160,28 @@
             }
         }
 
+        function relativeDayLabel(dayKey) {
+            const toKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            const today = new Date();
+            const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+            if (dayKey === toKey(today)) return "Aujourd'hui";
+            if (dayKey === toKey(yesterday)) return 'Hier';
+            return '';
+        }
+
+        function dayBannerHtml(group, summary) {
+            const badge = relativeDayLabel(group.dayKey);
+            return `
+                <div class="sticky top-0 z-10 flex items-center justify-between gap-2 flex-wrap bg-oumy-green text-white rounded-xl px-3 py-2 shadow-md">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <i class="fa-solid fa-calendar-day text-amber-300" aria-hidden="true"></i>
+                        <h5 class="text-xs font-black capitalize">${group.label}</h5>
+                        ${badge ? `<span class="bg-amber-400 text-slate-950 text-[9px] font-black uppercase px-2 py-0.5 rounded-md">${badge}</span>` : ''}
+                    </div>
+                    <span class="text-[10px] font-bold text-teal-50">${summary}</span>
+                </div>`;
+        }
+
         function renderDailyPreparation() {
             const container = document.getElementById('adminDailyPreparation');
             if (!container) return;
@@ -2180,6 +2202,7 @@
                     : 'unknown-date';
                 if (!groups.has(dayKey)) {
                     groups.set(dayKey, {
+                        dayKey,
                         label: orderDate
                             ? orderDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                             : 'Date non renseignée',
@@ -2202,17 +2225,16 @@
             });
 
             container.innerHTML = [...groups.values()].map(group => `
-                <section class="space-y-2">
-                    <div class="flex items-baseline justify-between gap-2 border-b border-slate-200 pb-1">
-                        <h5 class="text-xs font-extrabold text-slate-800 capitalize">${group.label}</h5>
-                        <span class="text-[10px] text-slate-500">${group.orderCount} commande${group.orderCount > 1 ? 's' : ''}</span>
-                    </div>
+                <section class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-2 space-y-2">
+                    ${dayBannerHtml(group, `${group.orderCount} commande${group.orderCount > 1 ? 's' : ''}`)}
+                    <div class="bg-white rounded-xl border border-slate-200 px-3 py-1">
                     ${group.products.size ? [...group.products.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(product => `
                         <div class="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
                             <span class="min-w-0 truncate text-slate-700">${escapeDeliveryHtml(product.name)}</span>
                             <span class="shrink-0 font-extrabold text-oumy-green">${formatQuantity(product.quantity)} ${escapeDeliveryHtml(product.unit)}</span>
                         </div>
                     `).join('') : '<p class="text-[10px] text-slate-400 py-2">Aucun article dans les commandes de cette journée.</p>'}
+                    </div>
                 </section>
             `).join('');
         }
@@ -2241,6 +2263,7 @@
                     : 'unknown-date';
                 if (!orderGroups.has(dayKey)) {
                     orderGroups.set(dayKey, {
+                        dayKey,
                         label: orderDate
                             ? orderDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                             : 'Date non renseignée',
@@ -2251,18 +2274,18 @@
             });
 
             container.innerHTML = [...orderGroups.values()].map(group => `
-                <section class="space-y-2">
-                    <h5 class="pt-3 pb-1 border-b border-slate-200 text-[11px] font-extrabold text-slate-600 capitalize">${group.label}</h5>
+                <section class="rounded-2xl border-2 border-slate-300 bg-slate-100/70 p-2 space-y-2 mb-4">
+                    ${dayBannerHtml(group, `${group.orders.length} commande${group.orders.length > 1 ? 's' : ''} · ${group.orders.reduce((sum, ord) => sum + (Number(ord.total) || 0), 0).toLocaleString('fr-FR')} FCFA`)}
                     ${group.orders.map(ord => `
-                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-                        <div class="flex items-center justify-between font-bold text-slate-900">
-                            <span>${ord.id} — ${ord.customer.name}</span>
-                            <span class="text-oumy-green">${ord.total.toLocaleString()} FCFA</span>
+                    <div class="bg-white p-3 rounded-xl border border-slate-200 border-l-4 border-l-amber-400 space-y-2">
+                        <div class="flex items-center justify-between gap-2 font-bold text-slate-900">
+                            <span class="min-w-0 break-words">${escapeDeliveryHtml(ord.id)} — ${escapeDeliveryHtml(ord.customer.name)}</span>
+                            <span class="text-oumy-green shrink-0">${(Number(ord.total) || 0).toLocaleString('fr-FR')} FCFA</span>
                         </div>
-                        <p class="text-slate-500 text-[10px]">Date et heure : ${ord.date || 'Non renseignées'}</p>
-                        <p class="text-slate-500 text-[10px]">📍 ${ord.customer.address} | 📞 ${ord.customer.phone}</p>
-                        <div class="text-[11px] text-slate-700 bg-white p-2 rounded-lg border border-slate-100">
-                            ${ord.items.map(i => `${formatOrderItemQuantity(i)} ${i.name}`).join(', ')}
+                        <p class="text-slate-500 text-[10px]">Date et heure : ${escapeDeliveryHtml(ord.date || 'Non renseignées')}</p>
+                        <p class="text-slate-500 text-[10px]">📍 ${escapeDeliveryHtml(ord.customer.address)} | 📞 ${escapeDeliveryHtml(ord.customer.phone)}</p>
+                        <div class="text-[11px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            ${ord.items.map(i => `${escapeDeliveryHtml(formatOrderItemQuantity(i))} ${escapeDeliveryHtml(i.name)}`).join(', ')}
                         </div>
                     </div>
                     `).join('')}
