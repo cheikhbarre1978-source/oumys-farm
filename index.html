@@ -2321,10 +2321,8 @@
         function renderHeroMosaic() {
             const mosaic = document.getElementById('heroMosaic');
             if (!mosaic) return;
-            const photos = albumItems().slice(0, 3);
-            const spans = photos.length === 1 ? ['col-span-2 row-span-2']
-                : photos.length === 2 ? ['row-span-2', 'row-span-2']
-                : ['row-span-2', '', ''];
+            const photos = albumItems().slice(0, 1);
+            const spans = ['col-span-2 row-span-2'];
             mosaic.innerHTML = photos.map((photo, index) => `
                 <button type="button" onclick="openAlbumPhoto(${index})" class="${spans[index]} relative rounded-xl overflow-hidden border border-white/25 shadow-md bg-teal-950/40 group focus:outline-none focus:ring-2 focus:ring-amber-300" aria-label="Agrandir la photo${photo.caption ? ` : ${escapeDeliveryHtml(photo.caption)}` : ''}">
                     <img src="${escapeDeliveryHtml(photo.image)}" alt="${escapeDeliveryHtml(photo.caption || 'Photo de la ferme')}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
