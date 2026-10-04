@@ -534,6 +534,13 @@
                     </div>
 
                     <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                        <h5 class="font-bold text-slate-900">Alléger les photos du site :</h5>
+                        <p class="text-[10px] text-slate-500">Réduit les photos des produits et de l'album déjà enregistrées, pour que le site s'ouvre plus vite sur téléphone. Opération définitive, sans effet visible à l'écran.</p>
+                        <button type="button" id="optimizeImagesButton" onclick="optimizeStoredImages()" class="px-3 py-1.5 bg-oumy-green text-white font-bold rounded-xl">Alléger les photos</button>
+                        <p id="optimizeImagesStatus" class="text-[10px] text-slate-600"></p>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
                         <h5 class="font-bold text-slate-900">Changer le Mot de passe Admin :</h5>
                         <p class="text-[10px] text-slate-500">Min. 8 caractères avec au moins 1 chiffre et 1 caractère spécial (!@#$%)</p>
                         <input type="password" id="settingNewPass" placeholder="Nouveau mot de passe" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none">
@@ -1130,6 +1137,8 @@
                     messagingSenderId: '328501948652'
                 });
                 cloudDb = firebase.firestore();
+                // Cache local : aux visites suivantes, le catalogue s'affiche sans retélécharger les photos.
+                try { cloudDb.enablePersistence({ synchronizeTabs: true }).catch(() => { }); } catch (persistenceError) { }
 
                 firebase.auth().onAuthStateChanged(user => {
                     if (!user) {
@@ -1185,6 +1194,18 @@
         }
 
         // --- RENDER STOREFRONT PRODUCTS ---
+        // Allège les images distantes (Unsplash, Pexels) : l'écran n'en affiche jamais plus de ~560 px de large.
+        function lightImageUrl(url) {
+            const value = String(url || '');
+            if (value.includes('images.unsplash.com')) {
+                return value.replace(/([?&])w=\d+/, '$1w=560').replace(/([?&])q=\d+/, '$1q=70');
+            }
+            if (value.includes('images.pexels.com')) {
+                return value.replace(/([?&])w=\d+/, '$1w=560');
+            }
+            return value;
+        }
+
         function renderProducts() {
             const grid = document.getElementById('productsGrid');
             if (!grid) return;
@@ -1209,8 +1230,9 @@
                 return;
             }
 
-            grid.innerHTML = filtered.map(p => {
+            grid.innerHTML = filtered.map((p, cardIndex) => {
                 const isPack = p.category === 'packs';
+                const imageLoading = cardIndex < 4 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
                 const isOutOfStock = p.inStock === false;
 
                 return `
@@ -1218,7 +1240,7 @@
                     <div>
                         <!-- Image Container -->
                         <div class="relative product-image-frame overflow-hidden bg-slate-100">
-                            <img src="${p.image || FALLBACK_IMAGE}" alt="${p.name}" onerror="this.src='${FALLBACK_IMAGE}'" class="product-image w-full h-full transition-transform duration-300 hover:scale-105">
+                            <img src="${lightImageUrl(p.image || FALLBACK_IMAGE)}" alt="${p.name}" ${imageLoading} decoding="async" onerror="this.onerror=null;this.src='${lightImageUrl(FALLBACK_IMAGE)}'" class="product-image w-full h-full transition-transform duration-300 hover:scale-105">
                             
                             <!-- Badges -->
                             <div class="absolute top-2 left-2 flex flex-col gap-1">
@@ -2332,7 +2354,7 @@
             renderHeroMosaic();
             container.innerHTML = albumItems().map((photo, index) => `
                 <button type="button" onclick="openAlbumPhoto(${index})" class="snap-start shrink-0 w-44 sm:w-56 aspect-[4/5] rounded-2xl overflow-hidden relative border border-slate-200 shadow-xs bg-slate-200 group focus:outline-none focus:ring-2 focus:ring-oumy-green" aria-label="Agrandir la photo${photo.caption ? ` : ${escapeDeliveryHtml(photo.caption)}` : ''}">
-                    <img src="${escapeDeliveryHtml(photo.image)}" alt="${escapeDeliveryHtml(photo.caption || 'Photo de la ferme')}" loading="lazy" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                    <img src="${escapeDeliveryHtml(photo.image)}" alt="${escapeDeliveryHtml(photo.caption || 'Photo de la ferme')}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
                     ${photo.caption ? `<span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 to-transparent text-white text-[11px] font-bold text-left px-2.5 pt-6 pb-2">${escapeDeliveryHtml(photo.caption)}</span>` : ''}
                 </button>
             `).join('');
@@ -2345,7 +2367,7 @@
             const spans = ['col-span-2 row-span-2'];
             mosaic.innerHTML = photos.map((photo, index) => `
                 <button type="button" onclick="openAlbumPhoto(${index})" class="${spans[index]} relative rounded-xl overflow-hidden border border-white/25 shadow-md bg-teal-950/40 group focus:outline-none focus:ring-2 focus:ring-amber-300" aria-label="Agrandir la photo${photo.caption ? ` : ${escapeDeliveryHtml(photo.caption)}` : ''}">
-                    <img src="${escapeDeliveryHtml(photo.image)}" alt="${escapeDeliveryHtml(photo.caption || 'Photo de la ferme')}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                    <img src="${escapeDeliveryHtml(photo.image)}" alt="${escapeDeliveryHtml(photo.caption || 'Photo de la ferme')}" fetchpriority="high" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
                 </button>
             `).join('');
         }
@@ -2386,6 +2408,72 @@
             if (event.key === 'ArrowLeft') stepAlbumPhoto(-1);
             if (event.key === 'ArrowRight') stepAlbumPhoto(1);
         });
+
+        function recompressDataUrl(dataUrl, maxSize, quality) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => {
+                    const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(image.width * scale);
+                    canvas.height = Math.round(image.height * scale);
+                    const context = canvas.getContext('2d');
+                    if (!context) { reject(new Error('canvas-unavailable')); return; }
+                    context.fillStyle = '#fff';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+                    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                image.onerror = () => reject(new Error('invalid-image'));
+                image.src = dataUrl;
+            });
+        }
+
+        async function optimizeStoredImages() {
+            if (!requireFirebaseAdmin()) return;
+            const threshold = 60000;
+            const products = productsList.filter(product => String(product.image || '').startsWith('data:image') && product.image.length > threshold);
+            const photos = farmAlbum.filter(photo => String(photo.image || '').startsWith('data:image') && photo.image.length > threshold);
+            const status = document.getElementById('optimizeImagesStatus');
+            if (!products.length && !photos.length) {
+                status.textContent = "Toutes les photos sont déjà légères.";
+                return;
+            }
+            if (!confirm(`Alléger ${products.length} photo(s) de produits et ${photos.length} photo(s) d'album ? Cette opération est définitive.`)) return;
+
+            const button = document.getElementById('optimizeImagesButton');
+            button.disabled = true;
+            let before = 0, after = 0, done = 0;
+            const total = products.length + photos.length;
+            const jobs = [
+                ...products.map(item => ({ item, collection: 'catalogProducts', size: 640, quality: 0.72 })),
+                ...photos.map(item => ({ item, collection: 'farmAlbum', size: 800, quality: 0.74 }))
+            ];
+            try {
+                for (const job of jobs) {
+                    status.textContent = `Allègement en cours… ${done}/${total}`;
+                    const lighter = await recompressDataUrl(job.item.image, job.size, job.quality);
+                    if (lighter.length < job.item.image.length * 0.9) {
+                        await cloudDb.collection(job.collection).doc(job.item.id).update({ image: lighter });
+                        before += job.item.image.length;
+                        after += lighter.length;
+                        job.item.image = lighter;
+                    }
+                    done += 1;
+                }
+                const saved = Math.round((before - after) / 1024);
+                status.textContent = `Terminé : ${done} photo(s) traitée(s), ${saved.toLocaleString('fr-FR')} Ko économisés.`;
+                renderProducts();
+                renderFarmAlbum();
+                renderAdminAlbum();
+            } catch (error) {
+                status.textContent = error.code === 'permission-denied'
+                    ? "Refusé : connectez-vous avec le compte administrateur."
+                    : `Interrompu après ${done}/${total} photo(s). Vous pouvez relancer.`;
+            } finally {
+                button.disabled = false;
+            }
+        }
 
         function renderAdminAlbum() {
             const container = document.getElementById('adminAlbumList');
