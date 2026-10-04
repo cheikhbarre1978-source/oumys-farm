@@ -2272,7 +2272,8 @@
                 if (cloudOrdersUnsubscribe) return;
 
                 cloudOrdersUnsubscribe = cloudDb.collection('orders').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-                    const ordersById = new Map(ordersHistory.map(order => [order.id, order]));
+                    // La base en ligne fait foi : une commande supprimée côté Firebase disparaît aussi de l'admin.
+                    const ordersById = new Map();
                     snapshot.docs.forEach(document => {
                         const order = document.data();
                         const orderId = order.id || document.id;
