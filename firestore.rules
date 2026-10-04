@@ -51,6 +51,19 @@ service cloud.firestore {
       && validZoneAt(data.zones, 11);
   }
 
+  function validAlbumPhoto(photoId) {
+    let data = request.resource.data;
+    return data.keys().hasOnly(['id', 'image', 'caption', 'createdAt'])
+      && data.keys().hasAll(['id', 'image', 'caption', 'createdAt'])
+      && data.id == photoId
+      && data.image is string
+      && data.image.size() <= 500000
+      && data.image.matches('^data:image/jpeg;base64,.*')
+      && data.caption is string
+      && data.caption.size() <= 140
+      && data.createdAt is timestamp;
+  }
+
   function validWhatsAppSettings() {
     let data = request.resource.data;
     return data.keys().hasOnly(['phone', 'updatedAt'])
@@ -106,6 +119,12 @@ service cloud.firestore {
         && ((settingId == 'delivery' && validDeliverySettings())
           || (settingId == 'whatsapp' && validWhatsAppSettings()));
       allow delete: if false;
+    }
+
+    match /farmAlbum/{photoId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && validAlbumPhoto(photoId);
+      allow delete: if isAdmin();
     }
 
     match /orders/{orderId} {

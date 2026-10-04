@@ -90,29 +90,47 @@
     <!-- Main Content Container -->
     <main class="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 space-y-4">
 
-        <!-- Hero Promo Banner -->
-        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-900 via-oumy-green to-teal-800 text-white p-4 sm:p-6 shadow-lg border border-teal-700/40">
-            <div class="relative z-10 max-w-xl space-y-2">
-                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider">
-                    <i class="fa-solid fa-truck-fast"></i> Livraisons Dakar & Banlieue
-                </span>
-                <h2 class="text-lg sm:text-2xl font-black leading-snug">
-                    Faites toutes vos courses fraîches en 1 clic ! 🇸🇳
-                </h2>
-                <p class="text-xs sm:text-sm text-teal-100 font-medium leading-relaxed">
-                    Légumes du jardin, Poissons & Produits halieutiques, Volailles fraîches, Œufs et Packs familiaux d'approvisionnement.
-                </p>
+        <!-- Accueil : présentation et album de la ferme -->
+        <section id="accueil" aria-labelledby="accueilTitle" class="space-y-3">
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-900 via-oumy-green to-teal-800 text-white p-4 sm:p-6 shadow-lg border border-teal-700/40">
+                <div class="relative z-10 max-w-xl space-y-2.5">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider">
+                        <i class="fa-solid fa-seedling"></i> Du champ à la marmite
+                    </span>
+                    <h2 id="accueilTitle" class="text-lg sm:text-2xl font-black leading-snug">
+                        Bienvenue chez Oumy's Farm 🇸🇳
+                    </h2>
+                    <p class="text-xs sm:text-sm text-teal-100 font-medium leading-relaxed">
+                        Des légumes frais, cultivés avec soin et livrés chez vous. Composez votre panier en quelques clics, ou choisissez un pack familial d'approvisionnement.
+                    </p>
+                    <ul class="flex flex-wrap gap-1.5 text-[11px] font-bold">
+                        <li class="inline-flex items-center gap-1 bg-white/10 border border-white/20 rounded-lg px-2 py-1"><i class="fa-solid fa-truck-fast text-amber-300"></i> Livraison Dakar &amp; banlieue</li>
+                        <li class="inline-flex items-center gap-1 bg-white/10 border border-white/20 rounded-lg px-2 py-1"><i class="fa-solid fa-leaf text-amber-300"></i> Légumes frais du jardin</li>
+                        <li class="inline-flex items-center gap-1 bg-white/10 border border-white/20 rounded-lg px-2 py-1"><i class="fa-solid fa-box-open text-amber-300"></i> Packs familiaux</li>
+                    </ul>
+                    <button type="button" onclick="document.getElementById('searchInput').scrollIntoView({ behavior: 'smooth', block: 'center' })" class="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black active:scale-95 transition-transform">
+                        <i class="fa-solid fa-basket-shopping"></i> Voir le marché
+                    </button>
+                </div>
+                <div class="absolute -right-6 -bottom-8 opacity-15 pointer-events-none text-9xl font-black text-amber-300">
+                    <i class="fa-solid fa-leaf"></i>
+                </div>
             </div>
-            <div class="absolute -right-6 -bottom-8 opacity-15 pointer-events-none text-9xl font-black text-amber-300">
-                <i class="fa-solid fa-fish-fins"></i>
+
+            <div class="space-y-2">
+                <div>
+                    <h3 class="text-sm font-black text-slate-900">📷 Notre ferme en images</h3>
+                    <p class="text-[11px] text-slate-500">Nos plants, nos récoltes, le travail de chaque jour.</p>
+                </div>
+                <div id="farmAlbum" class="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 custom-scrollbar" aria-label="Album photos de la ferme"></div>
             </div>
-        </div>
+        </section>
 
         <!-- Search Bar & Rayon Filters -->
         <div class="space-y-3">
             <div class="relative">
                 <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Rechercher oignons, poulet, thiof, alvéole d'œufs, pack familial..." class="w-full text-xs pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white shadow-xs focus:border-oumy-green focus:ring-2 focus:ring-oumy-green/20 outline-none transition-all">
+                <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Rechercher oignons, piment, betterave, pack familial..." class="w-full text-xs pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white shadow-xs focus:border-oumy-green focus:ring-2 focus:ring-oumy-green/20 outline-none transition-all">
             </div>
 
             <!-- Filter Buttons Horizontal Scroll (Dynamic Rayons) -->
@@ -255,6 +273,17 @@
         </div>
     </div>
 
+    <!-- Visionneuse de l'album -->
+    <div id="albumLightbox" class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-slate-950/90 p-3" role="dialog" aria-modal="true" aria-label="Photo de la ferme" onclick="if (event.target === this) closeAlbumPhoto()">
+        <button type="button" onclick="closeAlbumPhoto()" aria-label="Fermer" class="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+        <button type="button" id="albumPrev" onclick="stepAlbumPhoto(-1)" aria-label="Photo précédente" class="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white"><i class="fa-solid fa-chevron-left"></i></button>
+        <button type="button" id="albumNext" onclick="stepAlbumPhoto(1)" aria-label="Photo suivante" class="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white"><i class="fa-solid fa-chevron-right"></i></button>
+        <figure class="max-w-3xl w-full text-center space-y-2">
+            <img id="albumLightboxImg" alt="" class="mx-auto max-h-[80vh] max-w-full object-contain rounded-xl">
+            <figcaption id="albumLightboxCaption" class="text-xs text-white/90 font-medium"></figcaption>
+        </figure>
+    </div>
+
     <!-- Admin Dashboard Modal -->
     <div id="adminModal" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs hidden">
         <div class="bg-white rounded-2xl max-w-5xl w-full max-h-[95vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
@@ -303,6 +332,9 @@
                     </button>
                     <button type="button" onclick="switchAdminTab('preparations')" id="tab-preparations" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
                         📦 Préparations
+                    </button>
+                    <button type="button" onclick="switchAdminTab('album')" id="tab-album" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
+                        📷 Album
                     </button>
                     <button type="button" onclick="switchAdminTab('customers')" id="tab-customers" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
                         👥 Clients
@@ -411,6 +443,18 @@
                     <div id="adminDailyPreparation" class="space-y-4 text-xs">
                         <p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>
                     </div>
+                </div>
+
+                <!-- Tab Content: Album -->
+                <div id="adminTabAlbum" class="admin-content flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 custom-scrollbar hidden">
+                    <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                        <h4 class="font-bold text-xs text-slate-800">Ajouter des photos à l'album de la page d'accueil</h4>
+                        <input type="file" id="albumFiles" accept="image/*" multiple class="w-full text-xs file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-teal-100 file:text-teal-900 file:font-bold">
+                        <input type="text" id="albumCaption" maxlength="140" placeholder="Légende (facultative), ex : Nos plants de piment" class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none">
+                        <button type="button" id="albumAddButton" onclick="addAlbumPhotos()" class="px-3 py-1.5 bg-oumy-green text-white font-bold rounded-xl text-xs">Ajouter à l'album</button>
+                        <p class="text-[10px] text-slate-500">Plusieurs photos peuvent être choisies d'un coup. Elles sont réduites automatiquement pour charger vite sur téléphone.</p>
+                    </div>
+                    <div id="adminAlbumList" class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs"></div>
                 </div>
 
                 <!-- Tab Content: Customers -->
@@ -956,6 +1000,7 @@
             renderDeliveryZoneSelect();
             renderDeliveryZonesAdmin();
             renderProducts();
+            renderFarmAlbum();
             updateCartUI();
             initializeCloudSync();
         });
@@ -1111,6 +1156,12 @@
                         const phoneInput = document.getElementById('settingPhone');
                         if (phoneInput && document.activeElement !== phoneInput) phoneInput.value = phone;
                     }, () => showToast("Impossible de charger le numéro WhatsApp."));
+
+                    cloudDb.collection('farmAlbum').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                        farmAlbum = snapshot.docs.map(document => ({ ...document.data(), id: document.id }));
+                        renderFarmAlbum();
+                        renderAdminAlbum();
+                    }, () => { /* album indisponible : on garde les photos d'exemple */ });
                 });
             } catch (error) {
                 cloudDb = null;
@@ -1775,6 +1826,9 @@
                 document.getElementById('adminTabPreparations').classList.remove('hidden');
                 renderDailyPreparation();
                 loadAdminOrdersFromCloud();
+            } else if (tab === 'album') {
+                document.getElementById('adminTabAlbum').classList.remove('hidden');
+                renderAdminAlbum();
             } else if (tab === 'customers') {
                 document.getElementById('adminTabCustomers').classList.remove('hidden');
                 renderAdminCustomers();
@@ -2237,6 +2291,132 @@
                     </div>
                     <span class="text-[10px] font-bold text-teal-50">${summary}</span>
                 </div>`;
+        }
+
+        // --- ACCUEIL : ALBUM DE LA FERME ---
+        const DEFAULT_ALBUM = [
+            { id: 'exemple-plants', image: 'Images/herbes-collage-agrandi.jpg', caption: 'Nos plants et nos récoltes' }
+        ];
+        let farmAlbum = [];
+        let albumLightboxIndex = 0;
+
+        function albumItems() {
+            return farmAlbum.length ? farmAlbum : DEFAULT_ALBUM;
+        }
+
+        function renderFarmAlbum() {
+            const container = document.getElementById('farmAlbum');
+            if (!container) return;
+            container.innerHTML = albumItems().map((photo, index) => `
+                <button type="button" onclick="openAlbumPhoto(${index})" class="snap-start shrink-0 w-44 sm:w-56 aspect-[4/5] rounded-2xl overflow-hidden relative border border-slate-200 shadow-xs bg-slate-200 group focus:outline-none focus:ring-2 focus:ring-oumy-green" aria-label="Agrandir la photo${photo.caption ? ` : ${escapeDeliveryHtml(photo.caption)}` : ''}">
+                    <img src="${escapeDeliveryHtml(photo.image)}" alt="${escapeDeliveryHtml(photo.caption || 'Photo de la ferme')}" loading="lazy" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                    ${photo.caption ? `<span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 to-transparent text-white text-[11px] font-bold text-left px-2.5 pt-6 pb-2">${escapeDeliveryHtml(photo.caption)}</span>` : ''}
+                </button>
+            `).join('');
+        }
+
+        function showAlbumPhoto() {
+            const items = albumItems();
+            const photo = items[albumLightboxIndex];
+            if (!photo) return;
+            const image = document.getElementById('albumLightboxImg');
+            image.src = photo.image;
+            image.alt = photo.caption || 'Photo de la ferme';
+            document.getElementById('albumLightboxCaption').textContent = photo.caption || '';
+            const hasSeveral = items.length > 1;
+            document.getElementById('albumPrev').classList.toggle('hidden', !hasSeveral);
+            document.getElementById('albumNext').classList.toggle('hidden', !hasSeveral);
+        }
+
+        function openAlbumPhoto(index) {
+            albumLightboxIndex = index;
+            showAlbumPhoto();
+            document.getElementById('albumLightbox').classList.remove('hidden');
+        }
+
+        function closeAlbumPhoto() {
+            document.getElementById('albumLightbox').classList.add('hidden');
+        }
+
+        function stepAlbumPhoto(direction) {
+            const count = albumItems().length;
+            albumLightboxIndex = (albumLightboxIndex + direction + count) % count;
+            showAlbumPhoto();
+        }
+
+        document.addEventListener('keydown', event => {
+            const lightbox = document.getElementById('albumLightbox');
+            if (!lightbox || lightbox.classList.contains('hidden')) return;
+            if (event.key === 'Escape') closeAlbumPhoto();
+            if (event.key === 'ArrowLeft') stepAlbumPhoto(-1);
+            if (event.key === 'ArrowRight') stepAlbumPhoto(1);
+        });
+
+        function renderAdminAlbum() {
+            const container = document.getElementById('adminAlbumList');
+            if (!container) return;
+            if (!farmAlbum.length) {
+                container.innerHTML = `<p class="col-span-full text-center text-slate-400 py-6">Aucune photo ajoutée pour l'instant. La page d'accueil affiche une photo d'exemple, qui disparaît dès que vous ajoutez la vôtre.</p>`;
+                return;
+            }
+            container.innerHTML = farmAlbum.map(photo => `
+                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <img src="${escapeDeliveryHtml(photo.image)}" alt="" class="w-full aspect-[4/3] object-cover">
+                    <div class="p-2 space-y-1.5">
+                        <p class="text-[10px] text-slate-600 break-words min-h-[1.5em]">${escapeDeliveryHtml(photo.caption || 'Sans légende')}</p>
+                        <button type="button" data-photo-id="${escapeDeliveryHtml(photo.id)}" onclick="deleteAlbumPhoto(this.dataset.photoId)" class="w-full py-1 rounded-lg text-[10px] font-bold text-rose-600 hover:bg-rose-50 border border-rose-200"><i class="fa-solid fa-trash"></i> Supprimer</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addAlbumPhotos() {
+            if (!requireFirebaseAdmin()) return;
+            const input = document.getElementById('albumFiles');
+            const files = [...(input.files || [])];
+            if (!files.length) {
+                showToast("Choisissez au moins une photo.");
+                return;
+            }
+            const caption = document.getElementById('albumCaption').value.trim().slice(0, 140);
+            const button = document.getElementById('albumAddButton');
+            button.disabled = true;
+            let added = 0;
+            try {
+                for (const file of files) {
+                    const image = await processProductImageFile(file);
+                    if (image.length > 480000) {
+                        showToast(`« ${file.name} » est trop lourde, même réduite.`);
+                        continue;
+                    }
+                    const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+                    await cloudDb.collection('farmAlbum').doc(id).set({
+                        id, image, caption,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    added += 1;
+                }
+                if (added) showToast(`${added} photo${added > 1 ? 's' : ''} ajoutée${added > 1 ? 's' : ''} à l'album.`);
+                input.value = '';
+                document.getElementById('albumCaption').value = '';
+            } catch (error) {
+                showToast(error.code === 'permission-denied'
+                    ? "Ajout refusé : connectez-vous avec le compte admin (ou déployez les nouvelles règles)."
+                    : "Impossible d'ajouter la photo. Vérifiez la connexion.");
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function deleteAlbumPhoto(photoId) {
+            if (!requireFirebaseAdmin()) return;
+            if (!confirm("Supprimer cette photo de l'album ?")) return;
+            try {
+                await cloudDb.collection('farmAlbum').doc(photoId).delete();
+                showToast("Photo supprimée.");
+            } catch (error) {
+                showToast("Impossible de supprimer la photo.");
+            }
         }
 
         function buildCustomersFromOrders() {
