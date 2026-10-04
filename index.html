@@ -129,15 +129,6 @@
                 <button type="button" onclick="filterCategory('bio')" id="filter-bio" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
                     ✨ 100% BIO
                 </button>
-                <button type="button" onclick="filterCategory('oeufs')" id="filter-oeufs" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
-                    🥚 Œufs & Produits Frais
-                </button>
-                <button type="button" onclick="filterCategory('halieutique')" id="filter-halieutique" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
-                    🐟 Produits Halieutiques
-                </button>
-                <button type="button" onclick="filterCategory('volaille')" id="filter-volaille" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
-                    🍗 Poulet & Volailles
-                </button>
             </div>
         </div>
 
@@ -347,9 +338,6 @@
                                 <select id="newProdCat" class="w-full text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 focus:border-oumy-green outline-none font-semibold">
                                     <option value="packs">📦 Pack d'Approvisionnement</option>
                                     <option value="legumes">🥬 Légumes & Féculents</option>
-                                    <option value="halieutique">🐟 Produits Halieutiques (Poissons & Fruits de mer)</option>
-                                    <option value="volaille">🍗 Poulet & Volailles</option>
-                                    <option value="oeufs">🥚 Œufs & Produit Frais</option>
                                     <option value="bio">✨ Produit 100% BIO</option>
                                 </select>
                             </div>
@@ -836,39 +824,6 @@
                 category: "legumes",
                 price: 600,
                 unit: "kg",
-                inStock: true
-            },
-            {
-                id: "thiof-frais",
-                name: "Thiof Frais du Jour (Mérou)",
-                category: "halieutique",
-                price: 4500,
-                unit: "kg",
-                badge: "Halieutique",
-                image: "https://images.unsplash.com/photo-1534939561126-855b8675edd7?auto=format&fit=crop&w=600&q=80",
-                composition: "",
-                inStock: true
-            },
-            {
-                id: "poulet-fermier",
-                name: "Poulet Chair Fermier Nettoyé",
-                category: "volaille",
-                price: 3500,
-                unit: "poulet (1.5kg)",
-                badge: "Volaille Fraîche",
-                image: "https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=600&q=80",
-                composition: "",
-                inStock: true
-            },
-            {
-                id: "alveole-oeufs",
-                name: "Alvéole de 30 Œufs Frais",
-                category: "oeufs",
-                price: 2600,
-                unit: "alvéole (30 œufs)",
-                badge: "Œufs Frais",
-                image: "https://images.unsplash.com/photo-1506976785307-8732e854ad03?auto=format&fit=crop&w=600&q=80",
-                composition: "",
                 inStock: true
             },
             {
