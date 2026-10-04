@@ -2589,6 +2589,38 @@
                 </section>`;
         }
 
+        const PREP_CATEGORY_LABELS = {
+            legumes: '🥬 Légumes & Féculents',
+            packs: '📦 Pack vert',
+            oeufs: '🥚 Œufs & Produits Frais',
+            halieutique: '🐟 Produits Halieutiques',
+            volaille: '🐔 Volaille',
+            autres: '🧺 Autres'
+        };
+        const PREP_STORAGE_KEY = 'oumy_prep_done';
+
+        function readPrepDone() {
+            try { return JSON.parse(localStorage.getItem(PREP_STORAGE_KEY)) || {}; } catch (error) { return {}; }
+        }
+
+        function isPrepDone(key) {
+            return Boolean(readPrepDone()[key]);
+        }
+
+        function togglePrepDone(key) {
+            const done = readPrepDone();
+            if (done[key]) delete done[key]; else done[key] = true;
+            try { localStorage.setItem(PREP_STORAGE_KEY, JSON.stringify(done)); } catch (error) { showToast("Impossible de mémoriser les cases cochées sur cet appareil."); }
+            renderDailyPreparation();
+        }
+
+        function resetPrepDay(dayKey) {
+            const done = readPrepDone();
+            Object.keys(done).forEach(key => { if (key.startsWith(`${dayKey}|`)) delete done[key]; });
+            try { localStorage.setItem(PREP_STORAGE_KEY, JSON.stringify(done)); } catch (error) { }
+            renderDailyPreparation();
+        }
+
         let selectedPreparationDay = null;
 
         function selectPreparationDay(dayKey) {
@@ -2635,7 +2667,7 @@
                     if (quantity <= 0) return;
                     const unit = item.unit || 'unité';
                     const productKey = `${item.id || item.name}::${unit}`;
-                    const current = group.products.get(productKey) || { name: item.name || 'Article', unit, quantity: 0 };
+                    const current = group.products.get(productKey) || { key: productKey, name: item.name || 'Article', unit, category: item.category || '', quantity: 0 };
                     current.quantity += quantity;
                     group.products.set(productKey, current);
                 });
@@ -2653,38 +2685,78 @@
                 </button>`;
             }).join('');
 
-            const productRows = [...group.products.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(product => `
-                <div class="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
-                    <span class="min-w-0 truncate text-slate-700">${escapeDeliveryHtml(product.name)}</span>
-                    <span class="shrink-0 font-extrabold text-oumy-green">${formatQuantity(product.quantity)} ${escapeDeliveryHtml(product.unit)}</span>
-                </div>
-            `).join('');
+            const products = [...group.products.values()];
+            const productDone = product => isPrepDone(`${group.dayKey}|p|${product.key}`);
+            const doneProducts = products.filter(productDone).length;
 
-            const orderRows = [...group.orders].reverse().map(ord => {
-                const items = Array.isArray(ord.items) ? ord.items : [];
-                return `
-                <div class="py-2 border-b border-slate-100 last:border-0 space-y-0.5">
-                    <div class="flex items-center justify-between gap-2 font-bold text-slate-800">
-                        <span class="min-w-0 break-words">${escapeDeliveryHtml(ord.customer?.name || 'Client')}</span>
-                        <span class="text-[10px] font-semibold text-slate-500 shrink-0">${escapeDeliveryHtml(ord.customer?.zone || '')}</span>
-                    </div>
-                    <p class="text-[10px] text-slate-500">📍 ${escapeDeliveryHtml(ord.customer?.address || '')} | 📞 ${escapeDeliveryHtml(ord.customer?.phone || '')}</p>
-                    <p class="text-[11px] text-slate-700">${items.map(i => `${escapeDeliveryHtml(formatOrderItemQuantity(i))} ${escapeDeliveryHtml(i.name)}`).join(', ')}</p>
-                </div>`;
-            }).join('');
+            const categoryOrder = Object.keys(PREP_CATEGORY_LABELS);
+            const byCategory = new Map();
+            products.forEach(product => {
+                const category = PREP_CATEGORY_LABELS[product.category] ? product.category : 'autres';
+                if (!byCategory.has(category)) byCategory.set(category, []);
+                byCategory.get(category).push(product);
+            });
+            const productRows = [...byCategory.entries()]
+                .sort((a, b) => categoryOrder.indexOf(a[0]) - categoryOrder.indexOf(b[0]))
+                .map(([category, list]) => `
+                    <div class="pt-2 first:pt-0">
+                        <p class="text-[10px] font-black text-slate-500 bg-slate-100 rounded-md px-2 py-0.5 mb-1">${PREP_CATEGORY_LABELS[category] || PREP_CATEGORY_LABELS.autres}</p>
+                        ${list.sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(product => {
+                            const done = productDone(product);
+                            return `<label class="flex items-center gap-2 py-1.5 border-b border-slate-100 last:border-0 cursor-pointer ${done ? 'opacity-50' : ''}">
+                                <input type="checkbox" ${done ? 'checked' : ''} data-key="${escapeDeliveryHtml(`${group.dayKey}|p|${product.key}`)}" onchange="togglePrepDone(this.dataset.key)" class="w-4 h-4 accent-emerald-700 shrink-0">
+                                <span class="min-w-0 truncate text-slate-700 ${done ? 'line-through' : ''}">${escapeDeliveryHtml(product.name)}</span>
+                                <span class="ml-auto shrink-0 font-extrabold text-oumy-green ${done ? 'line-through' : ''}">${formatQuantity(product.quantity)} ${escapeDeliveryHtml(product.unit)}</span>
+                            </label>`;
+                        }).join('')}
+                    </div>`).join('');
+
+            // Commandes regroupées par zone de livraison (tournée)
+            const byZone = new Map();
+            [...group.orders].reverse().forEach(ord => {
+                const zone = String(ord.customer?.zone || '').split(' - ')[0].trim() || 'Zone non renseignée';
+                if (!byZone.has(zone)) byZone.set(zone, []);
+                byZone.get(zone).push(ord);
+            });
+            const doneOrders = group.orders.filter(ord => isPrepDone(`${group.dayKey}|o|${ord.id}`)).length;
+            const orderRows = [...byZone.entries()].map(([zone, list]) => `
+                <div class="pt-2 first:pt-0">
+                    <p class="text-[10px] font-black text-slate-500 bg-slate-100 rounded-md px-2 py-0.5 mb-1">🚚 ${escapeDeliveryHtml(zone)} · ${list.length} commande${list.length > 1 ? 's' : ''}</p>
+                    ${list.map(ord => {
+                        const done = isPrepDone(`${group.dayKey}|o|${ord.id}`);
+                        const items = Array.isArray(ord.items) ? ord.items : [];
+                        return `<label class="flex items-start gap-2 py-2 border-b border-slate-100 last:border-0 cursor-pointer ${done ? 'opacity-50' : ''}">
+                            <input type="checkbox" ${done ? 'checked' : ''} data-key="${escapeDeliveryHtml(`${group.dayKey}|o|${ord.id}`)}" onchange="togglePrepDone(this.dataset.key)" class="w-4 h-4 mt-0.5 accent-emerald-700 shrink-0">
+                            <span class="min-w-0 space-y-0.5 ${done ? 'line-through' : ''}">
+                                <span class="block font-bold text-slate-800 break-words">${escapeDeliveryHtml(ord.customer?.name || 'Client')}</span>
+                                <span class="block text-[10px] text-slate-500">📍 ${escapeDeliveryHtml(ord.customer?.address || '')} | 📞 ${escapeDeliveryHtml(ord.customer?.phone || '')}</span>
+                                <span class="block text-[11px] text-slate-700">${items.map(i => `${escapeDeliveryHtml(formatOrderItemQuantity(i))} ${escapeDeliveryHtml(i.name)}`).join(', ')}</span>
+                            </span>
+                        </label>`;
+                    }).join('')}
+                </div>`).join('');
+
+            const progress = (done, total) => `<span class="text-[10px] font-bold ${total && done === total ? 'text-emerald-700' : 'text-slate-500'}">${done}/${total} ${total && done === total ? '✓' : ''}</span>`;
 
             container.innerHTML = `
                 <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar" role="group" aria-label="Choisir une journée">${dayChips}</div>
                 <section class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-2 space-y-2">
                     ${dayBannerHtml(group, `${group.orders.length} commande${group.orders.length > 1 ? 's' : ''}`)}
                     <div class="bg-white rounded-xl border border-slate-200 px-3 py-2">
-                        <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500 pb-1">À préparer ce jour</h6>
+                        <div class="flex items-center justify-between pb-1">
+                            <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500">À préparer ce jour</h6>
+                            ${progress(doneProducts, products.length)}
+                        </div>
                         ${productRows || '<p class="text-[10px] text-slate-400 py-2">Aucun article dans les commandes de cette journée.</p>'}
                     </div>
                     <div class="bg-white rounded-xl border border-slate-200 px-3 py-2">
-                        <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500 pb-1">Commandes du jour</h6>
+                        <div class="flex items-center justify-between pb-1">
+                            <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500">Commandes à livrer, par zone</h6>
+                            ${progress(doneOrders, group.orders.length)}
+                        </div>
                         ${orderRows}
                     </div>
+                    <button type="button" onclick="resetPrepDay('${group.dayKey}')" class="w-full py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-800">Réinitialiser les cases de cette journée</button>
                 </section>`;
         }
 
