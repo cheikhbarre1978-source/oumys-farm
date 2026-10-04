@@ -93,12 +93,13 @@
         <!-- Accueil : présentation et album de la ferme -->
         <section id="accueil" aria-labelledby="accueilTitle" class="space-y-3">
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-900 via-oumy-green to-teal-800 text-white p-4 sm:p-6 shadow-lg border border-teal-700/40">
-                <div class="relative z-10 max-w-xl space-y-2.5">
+                <div class="relative z-10 grid md:grid-cols-2 gap-4 md:gap-6 items-center">
+                <div class="max-w-xl space-y-2.5">
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider">
                         <i class="fa-solid fa-seedling"></i> Du champ à la marmite
                     </span>
                     <h2 id="accueilTitle" class="text-lg sm:text-2xl font-black leading-snug">
-                        Bienvenue chez Oumy's Farm 🇸🇳
+                        Bienvenue chez Oumy's Farm
                     </h2>
                     <p class="text-xs sm:text-sm text-teal-100 font-medium leading-relaxed">
                         Des légumes frais, cultivés avec soin et livrés chez vous. Composez votre panier en quelques clics.
@@ -110,6 +111,8 @@
                     <button type="button" onclick="document.getElementById('searchInput').scrollIntoView({ behavior: 'smooth', block: 'center' })" class="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black active:scale-95 transition-transform">
                         <i class="fa-solid fa-basket-shopping"></i> Voir le marché
                     </button>
+                </div>
+                <div id="heroMosaic" class="hidden md:grid grid-cols-2 grid-rows-2 gap-2 h-56 lg:h-64" aria-label="Photos de la ferme"></div>
                 </div>
                 <div class="absolute -right-6 -bottom-8 opacity-15 pointer-events-none text-9xl font-black text-amber-300">
                     <i class="fa-solid fa-leaf"></i>
@@ -2306,10 +2309,25 @@
         function renderFarmAlbum() {
             const container = document.getElementById('farmAlbum');
             if (!container) return;
+            renderHeroMosaic();
             container.innerHTML = albumItems().map((photo, index) => `
                 <button type="button" onclick="openAlbumPhoto(${index})" class="snap-start shrink-0 w-44 sm:w-56 aspect-[4/5] rounded-2xl overflow-hidden relative border border-slate-200 shadow-xs bg-slate-200 group focus:outline-none focus:ring-2 focus:ring-oumy-green" aria-label="Agrandir la photo${photo.caption ? ` : ${escapeDeliveryHtml(photo.caption)}` : ''}">
                     <img src="${escapeDeliveryHtml(photo.image)}" alt="${escapeDeliveryHtml(photo.caption || 'Photo de la ferme')}" loading="lazy" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
                     ${photo.caption ? `<span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 to-transparent text-white text-[11px] font-bold text-left px-2.5 pt-6 pb-2">${escapeDeliveryHtml(photo.caption)}</span>` : ''}
+                </button>
+            `).join('');
+        }
+
+        function renderHeroMosaic() {
+            const mosaic = document.getElementById('heroMosaic');
+            if (!mosaic) return;
+            const photos = albumItems().slice(0, 3);
+            const spans = photos.length === 1 ? ['col-span-2 row-span-2']
+                : photos.length === 2 ? ['row-span-2', 'row-span-2']
+                : ['row-span-2', '', ''];
+            mosaic.innerHTML = photos.map((photo, index) => `
+                <button type="button" onclick="openAlbumPhoto(${index})" class="${spans[index]} relative rounded-xl overflow-hidden border border-white/25 shadow-md bg-teal-950/40 group focus:outline-none focus:ring-2 focus:ring-amber-300" aria-label="Agrandir la photo${photo.caption ? ` : ${escapeDeliveryHtml(photo.caption)}` : ''}">
+                    <img src="${escapeDeliveryHtml(photo.image)}" alt="${escapeDeliveryHtml(photo.caption || 'Photo de la ferme')}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
                 </button>
             `).join('');
         }
