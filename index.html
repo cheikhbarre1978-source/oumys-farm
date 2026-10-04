@@ -2374,15 +2374,72 @@
                 container.innerHTML = `<p class="col-span-full text-center text-slate-400 py-6">Aucune photo ajoutée pour l'instant. La page d'accueil affiche une photo d'exemple, qui disparaît dès que vous ajoutez la vôtre.</p>`;
                 return;
             }
-            container.innerHTML = farmAlbum.map(photo => `
-                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                    <img src="${escapeDeliveryHtml(photo.image)}" alt="" class="w-full aspect-[4/3] object-cover">
-                    <div class="p-2 space-y-1.5">
-                        <p class="text-[10px] text-slate-600 break-words min-h-[1.5em]">${escapeDeliveryHtml(photo.caption || 'Sans légende')}</p>
-                        <button type="button" data-photo-id="${escapeDeliveryHtml(photo.id)}" onclick="deleteAlbumPhoto(this.dataset.photoId)" class="w-full py-1 rounded-lg text-[10px] font-bold text-rose-600 hover:bg-rose-50 border border-rose-200"><i class="fa-solid fa-trash"></i> Supprimer</button>
+            const iconButton = (label, icon, action, disabled = false, extra = '') =>
+                `<button type="button" ${disabled ? 'disabled' : ''} onclick="${action}" aria-label="${label}" title="${label}" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 ${extra}"><i class="fa-solid ${icon}"></i></button>`;
+            container.innerHTML = `<p class="col-span-full text-[10px] text-slate-500">Les photos s'affichent dans cet ordre sur la page d'accueil. La <b>première</b> est celle de la bannière.</p>` + farmAlbum.map((photo, index) => {
+                const id = escapeDeliveryHtml(photo.id);
+                return `
+                <div class="bg-white rounded-xl border-2 ${index === 0 ? 'border-amber-400' : 'border-slate-200'} overflow-hidden">
+                    <div class="relative">
+                        <img src="${escapeDeliveryHtml(photo.image)}" alt="" class="w-full aspect-[4/3] object-cover">
+                        <span class="absolute top-1.5 left-1.5 bg-slate-900/80 text-white text-[10px] font-black rounded-md px-1.5 py-0.5">${index + 1}</span>
+                        ${index === 0 ? '<span class="absolute top-1.5 right-1.5 bg-amber-400 text-slate-950 text-[9px] font-black uppercase rounded-md px-1.5 py-0.5">Bannière</span>' : ''}
                     </div>
-                </div>
-            `).join('');
+                    <div class="p-2 space-y-1.5">
+                        <input type="text" value="${escapeDeliveryHtml(photo.caption || '')}" maxlength="140" placeholder="Légende" aria-label="Légende de la photo ${index + 1}" data-photo-id="${id}" onchange="updateAlbumCaption(this.dataset.photoId, this.value)" class="w-full text-[11px] px-2 py-1 rounded-lg border border-slate-300 focus:border-oumy-green outline-none">
+                        <div class="flex items-center gap-1">
+                            ${iconButton('Mettre en première (bannière)', 'fa-star', `moveAlbumPhotoToFirst('${id}')`, index === 0, index === 0 ? 'text-amber-500' : '')}
+                            ${iconButton('Avancer cette photo', 'fa-arrow-left', `moveAlbumPhoto('${id}', -1)`, index === 0)}
+                            ${iconButton('Reculer cette photo', 'fa-arrow-right', `moveAlbumPhoto('${id}', 1)`, index === farmAlbum.length - 1)}
+                            <button type="button" data-photo-id="${id}" onclick="deleteAlbumPhoto(this.dataset.photoId)" aria-label="Supprimer la photo" title="Supprimer" class="ml-auto w-8 h-8 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function updateAlbumCaption(photoId, value) {
+            if (!requireFirebaseAdmin()) return;
+            try {
+                await cloudDb.collection('farmAlbum').doc(photoId).update({ caption: value.trim().slice(0, 140) });
+                showToast("Légende enregistrée.");
+            } catch (error) {
+                showToast("Impossible d'enregistrer la légende.");
+            }
+        }
+
+        // L'ordre d'affichage suit la date d'ajout (la plus récente en premier) :
+        // réordonner revient donc à échanger les dates de deux photos.
+        async function moveAlbumPhoto(photoId, direction) {
+            if (!requireFirebaseAdmin()) return;
+            const index = farmAlbum.findIndex(photo => photo.id === photoId);
+            const neighbour = farmAlbum[index + direction];
+            const photo = farmAlbum[index];
+            if (!photo || !neighbour) return;
+            if (!photo.createdAt || !neighbour.createdAt) {
+                showToast("Les photos sont encore en cours d'enregistrement, réessayez dans un instant.");
+                return;
+            }
+            try {
+                const batch = cloudDb.batch();
+                batch.update(cloudDb.collection('farmAlbum').doc(photo.id), { createdAt: neighbour.createdAt });
+                batch.update(cloudDb.collection('farmAlbum').doc(neighbour.id), { createdAt: photo.createdAt });
+                await batch.commit();
+            } catch (error) {
+                showToast("Impossible de changer l'ordre des photos.");
+            }
+        }
+
+        async function moveAlbumPhotoToFirst(photoId) {
+            if (!requireFirebaseAdmin()) return;
+            try {
+                await cloudDb.collection('farmAlbum').doc(photoId).update({
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast("Photo placée en première (bannière).");
+            } catch (error) {
+                showToast("Impossible de changer l'ordre des photos.");
+            }
         }
 
         async function addAlbumPhotos() {
