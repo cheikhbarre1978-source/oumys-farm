@@ -44,6 +44,11 @@
         .product-image-frame { aspect-ratio: 4 / 3; }
         .product-image { object-fit: contain; padding: 0.5rem; }
         .cart-line-total { white-space: nowrap; }
+        .filter-btn { padding: 0.65rem 1.1rem !important; font-size: 0.9rem !important; font-weight: 800 !important; border: 2px solid #94a3b8 !important; background: #fff !important; color: #0f172a !important; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
+        .filter-btn:hover { border-color: #0f766e !important; color: #0f766e !important; }
+        .filter-btn[aria-pressed="true"] { background: #0f766e !important; border-color: #0f766e !important; color: #fff !important; box-shadow: 0 4px 10px rgba(15, 118, 110, 0.35); }
+        #floatingCart { transition: transform 0.2s, opacity 0.2s; }
+        #floatingCart.is-hidden { transform: translateY(5rem); opacity: 0; pointer-events: none; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -78,7 +83,7 @@
                 </button>
 
                 <!-- Cart Button -->
-                <button type="button" onclick="toggleCartDrawer()" class="relative px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition-transform active:scale-95 flex items-center gap-1.5 shadow-md">
+                <button type="button" onclick="toggleCartDrawer()" class="relative px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-sm font-black transition-transform active:scale-95 flex items-center gap-2 shadow-lg ring-2 ring-amber-200/60">
                     <i class="fa-solid fa-basket-shopping text-teal-900"></i>
                     <span>Panier</span>
                     <span id="cartBadge" class="bg-oumy-chili text-white font-extrabold text-[10px] w-5 h-5 rounded-full flex items-center justify-center ml-0.5 shadow-xs">0</span>
@@ -137,16 +142,16 @@
 
             <!-- Filter Buttons Horizontal Scroll (Dynamic Rayons) -->
             <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar text-xs">
-                <button type="button" onclick="filterCategory('all')" id="filter-all" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-oumy-green text-white shadow-xs transition-all">
+                <button type="button" onclick="filterCategory('all')" id="filter-all" aria-pressed="true" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-oumy-green text-white shadow-xs transition-all">
                     🛍️ Tous les rayons
                 </button>
-                <button type="button" onclick="filterCategory('legumes')" id="filter-legumes" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                <button type="button" onclick="filterCategory('legumes')" id="filter-legumes" aria-pressed="false" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
                     🥬 Légumes & Féculents
                 </button>
-                <button type="button" onclick="filterCategory('packs')" id="filter-packs" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                <button type="button" onclick="filterCategory('packs')" id="filter-packs" aria-pressed="false" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
                     📦 Pack vert
                 </button>
-                <button type="button" onclick="filterCategory('bio')" id="filter-bio" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
+                <button type="button" onclick="filterCategory('bio')" id="filter-bio" aria-pressed="false" class="filter-btn px-3.5 py-1.5 rounded-xl font-bold shrink-0 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 shadow-2xs transition-all">
                     ✨ 100% BIO
                 </button>
             </div>
@@ -160,6 +165,14 @@
     </main>
 
     <!-- Cart Drawer (Side Slide-over) -->
+    <!-- Panier flottant : toujours accessible pendant le défilement -->
+    <button type="button" id="floatingCart" onclick="toggleCartDrawer()" aria-label="Voir mon panier" class="is-hidden fixed bottom-4 right-4 z-30 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm shadow-2xl ring-2 ring-white active:scale-95">
+        <i class="fa-solid fa-basket-shopping text-teal-900 text-lg"></i>
+        <span>Mon panier</span>
+        <span id="floatingCartCount" class="bg-oumy-chili text-white text-xs font-extrabold min-w-[1.5rem] h-6 px-1.5 rounded-full flex items-center justify-center">0</span>
+        <span id="floatingCartTotal" class="text-xs font-bold text-teal-900">0 FCFA</span>
+    </button>
+
     <div id="cartDrawer" class="fixed inset-0 z-50 overflow-hidden hidden">
         <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity" onclick="toggleCartDrawer()"></div>
         <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
@@ -575,7 +588,7 @@
     </div>
 
     <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-4 right-4 z-[110] transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-slate-700">
+    <div id="toast" class="fixed bottom-24 right-4 z-[110] transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-slate-700">
         <i class="fa-solid fa-circle-check text-amber-400"></i>
         <span id="toastMsg">Notification</span>
     </div>
@@ -1368,6 +1381,12 @@
             const subtotal = cartItems.reduce((acc, c) => acc + lineTotal(c), 0);
 
             if (badge) badge.textContent = formatQuantity(totalQty);
+            const floatingCart = document.getElementById('floatingCart');
+            if (floatingCart) {
+                floatingCart.classList.toggle('is-hidden', cartItems.length === 0);
+                document.getElementById('floatingCartCount').textContent = formatQuantity(totalQty);
+                document.getElementById('floatingCartTotal').textContent = `${subtotal.toLocaleString('fr-FR')} FCFA`;
+            }
             if (subtotalEl) subtotalEl.textContent = `${subtotal.toLocaleString()} FCFA`;
 
             if (!list) return;
