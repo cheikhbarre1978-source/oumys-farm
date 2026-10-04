@@ -525,6 +525,7 @@
         // --- CONSTANTS & DEFAULT CATALOG DATA ---
         const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80";
         const ADMIN_DELIVERY_EMAIL = 'cheikhbarre1978@gmail.com';
+        const MAX_DELIVERY_ZONES = 12;
         const DEFAULT_DELIVERY_ZONES = [
             { id: 'z1', name: 'Zone 1', areas: 'Plateau, Fann, Point E, Mermoz, Ouakam', fee: 1500 },
             { id: 'z2', name: 'Zone 2', areas: 'Almadies, Ngor, Yoff, Mamelles, Liberté', fee: 2000 },
@@ -1411,16 +1412,16 @@
 
         function normalizeDeliveryZones(zones) {
             const savedZones = Array.isArray(zones) ? zones : [];
-            return DEFAULT_DELIVERY_ZONES.map(defaultZone => {
-                const savedZone = savedZones.find(zone => zone.id === defaultZone.id) || {};
-                const fee = Number(savedZone.fee);
-                return {
-                    ...defaultZone,
-                    name: typeof savedZone.name === 'string' && savedZone.name.trim() ? savedZone.name.trim() : defaultZone.name,
-                    areas: typeof savedZone.areas === 'string' && savedZone.areas.trim() ? savedZone.areas.trim() : defaultZone.areas,
-                    fee: Number.isSafeInteger(fee) && fee >= 0 ? fee : defaultZone.fee
-                };
-            });
+            const seenIds = new Set();
+            const validZones = savedZones.flatMap(zone => {
+                const id = typeof zone?.id === 'string' ? zone.id.trim() : '';
+                const name = typeof zone?.name === 'string' ? zone.name.trim() : '';
+                const fee = Number(zone?.fee);
+                if (!id || id.length > 40 || seenIds.has(id) || !name || !Number.isSafeInteger(fee) || fee < 0) return [];
+                seenIds.add(id);
+                return [{ id, name, areas: typeof zone.areas === 'string' ? zone.areas.trim() : '', fee }];
+            }).slice(0, MAX_DELIVERY_ZONES);
+            return validZones.length ? validZones : DEFAULT_DELIVERY_ZONES.map(zone => ({ ...zone }));
         }
 
         function escapeDeliveryHtml(value) {
@@ -1437,7 +1438,7 @@
             const select = document.getElementById('deliveryZoneSelect');
             if (!select) return;
 
-            const selectedZone = deliveryZones.some(zone => zone.id === select.value) ? select.value : 'z1';
+            const selectedZone = deliveryZones.some(zone => zone.id === select.value) ? select.value : deliveryZones[0]?.id;
             select.innerHTML = deliveryZones.map(zone => {
                 const coverage = zone.areas ? ` : ${zone.areas}` : '';
                 const price = zone.fee === 0 ? 'Gratuit' : `+${zone.fee.toLocaleString('fr-FR')} FCFA`;
@@ -1446,29 +1447,74 @@
             select.value = selectedZone;
         }
 
-        function renderDeliveryZonesAdmin() {
+        function collectDeliveryZoneInputs() {
+            return [...document.querySelectorAll('#deliveryZonesAdminList [data-zone-card]')].map(card => {
+                const value = field => card.querySelector(`[data-zone-field="${field}"]`).value;
+                return { id: card.dataset.zoneCard, name: value('name').trim(), areas: value('areas').trim(), fee: value('fee') };
+            });
+        }
+
+        function renderDeliveryZonesAdmin(zones = deliveryZones) {
             const container = document.getElementById('deliveryZonesAdminList');
             if (!container) return;
 
-            container.innerHTML = deliveryZones.map(zone => `
-                <div class="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
-                    <h6 class="font-bold text-slate-800">${escapeDeliveryHtml(zone.name)}</h6>
+            container.innerHTML = zones.map((zone, index) => `
+                <div data-zone-card="${escapeDeliveryHtml(zone.id)}" class="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <h6 class="font-bold text-slate-800 min-w-0 truncate">${escapeDeliveryHtml(zone.name || 'Nouvelle zone')}</h6>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button type="button" onclick="moveDeliveryZone('${escapeDeliveryHtml(zone.id)}', -1)" ${index === 0 ? 'disabled' : ''} aria-label="Monter cette zone" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
+                            <button type="button" onclick="moveDeliveryZone('${escapeDeliveryHtml(zone.id)}', 1)" ${index === zones.length - 1 ? 'disabled' : ''} aria-label="Descendre cette zone" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
+                            <button type="button" onclick="removeDeliveryZone('${escapeDeliveryHtml(zone.id)}')" aria-label="Supprimer cette zone" class="w-8 h-8 rounded-lg text-rose-600 hover:bg-rose-50"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <label class="space-y-1">
                             <span class="block text-[10px] font-bold text-slate-500">Nom de la zone</span>
-                            <input data-zone-id="${zone.id}" data-zone-field="name" value="${escapeDeliveryHtml(zone.name)}" maxlength="60" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
+                            <input data-zone-field="name" value="${escapeDeliveryHtml(zone.name)}" maxlength="60" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
                         </label>
                         <label class="space-y-1">
                             <span class="block text-[10px] font-bold text-slate-500">Quartiers desservis</span>
-                            <input data-zone-id="${zone.id}" data-zone-field="areas" value="${escapeDeliveryHtml(zone.areas)}" maxlength="180" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
+                            <input data-zone-field="areas" value="${escapeDeliveryHtml(zone.areas)}" maxlength="180" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
                         </label>
                     </div>
                     <label class="space-y-1 block">
-                        <span class="block text-[10px] font-bold text-slate-500">Frais de livraison (FCFA)</span>
-                        <input type="number" min="0" step="1" data-zone-id="${zone.id}" data-zone-field="fee" value="${zone.fee}" class="w-full sm:w-48 px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
+                        <span class="block text-[10px] font-bold text-slate-500">Frais de livraison (FCFA) — 0 = gratuit</span>
+                        <input type="number" min="0" step="1" data-zone-field="fee" value="${escapeDeliveryHtml(zone.fee)}" class="w-full sm:w-48 px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-oumy-green">
                     </label>
                 </div>
-            `).join('');
+            `).join('') + `
+                <button type="button" onclick="addDeliveryZone()" class="w-full px-3 py-2 border-2 border-dashed border-slate-300 text-slate-600 hover:border-oumy-green hover:text-oumy-green font-bold rounded-xl">
+                    <i class="fa-solid fa-plus"></i> Ajouter une zone
+                </button>`;
+        }
+
+        function addDeliveryZone() {
+            const draft = collectDeliveryZoneInputs();
+            if (draft.length >= MAX_DELIVERY_ZONES) {
+                showToast(`Maximum ${MAX_DELIVERY_ZONES} zones de livraison.`);
+                return;
+            }
+            draft.push({ id: `z${Date.now().toString(36)}`, name: 'Nouvelle zone', areas: '', fee: 0 });
+            renderDeliveryZonesAdmin(draft);
+        }
+
+        function removeDeliveryZone(zoneId) {
+            const draft = collectDeliveryZoneInputs();
+            if (draft.length <= 1) {
+                showToast("Il faut garder au moins une zone de livraison.");
+                return;
+            }
+            renderDeliveryZonesAdmin(draft.filter(zone => zone.id !== zoneId));
+        }
+
+        function moveDeliveryZone(zoneId, direction) {
+            const draft = collectDeliveryZoneInputs();
+            const index = draft.findIndex(zone => zone.id === zoneId);
+            const target = index + direction;
+            if (index < 0 || target < 0 || target >= draft.length) return;
+            [draft[index], draft[target]] = [draft[target], draft[index]];
+            renderDeliveryZonesAdmin(draft);
         }
 
         async function saveDeliveryZones() {
@@ -1477,21 +1523,17 @@
                 return;
             }
 
-            let updatedZones;
-            try {
-                updatedZones = DEFAULT_DELIVERY_ZONES.map(defaultZone => {
-                    const name = document.querySelector(`[data-zone-id="${defaultZone.id}"][data-zone-field="name"]`).value.trim();
-                    const areas = document.querySelector(`[data-zone-id="${defaultZone.id}"][data-zone-field="areas"]`).value.trim();
-                    const feeInput = document.querySelector(`[data-zone-id="${defaultZone.id}"][data-zone-field="fee"]`).value;
-                    const fee = Number(feeInput);
-
-                    if (!name || !areas || !Number.isSafeInteger(fee) || fee < 0) {
-                        throw new Error('invalid-delivery-zone');
-                    }
-                    return { id: defaultZone.id, name, areas, fee };
-                });
-            } catch (error) {
-                showToast("Vérifiez les noms, quartiers et frais de chaque zone.");
+            const draft = collectDeliveryZoneInputs();
+            const updatedZones = draft.map(zone => ({
+                id: zone.id,
+                name: zone.name,
+                areas: zone.areas,
+                fee: String(zone.fee).trim() === '' ? NaN : Number(zone.fee)
+            }));
+            const invalid = updatedZones.length < 1 || updatedZones.length > MAX_DELIVERY_ZONES
+                || updatedZones.some(zone => !zone.name || !Number.isSafeInteger(zone.fee) || zone.fee < 0 || zone.fee > 100000);
+            if (invalid) {
+                showToast("Vérifiez le nom et les frais de chaque zone (entier entre 0 et 100 000).");
                 return;
             }
 
@@ -1511,7 +1553,7 @@
                 if (error.code === 'auth/operation-not-allowed') {
                     showToast("Activez e-mail/mot de passe dans Firebase Authentication.");
                 } else if (error.code === 'permission-denied') {
-                    showToast("Seul le compte administrateur peut enregistrer ces tarifs.");
+                    showToast("Enregistrement refusé : connectez-vous avec le compte administrateur (ou déployez les nouvelles règles).");
                 } else {
                     showToast("Impossible d’enregistrer les tarifs. Vérifiez la connexion et le compte administrateur.");
                 }

@@ -7,11 +7,13 @@ service cloud.firestore {
       && request.auth.token.firebase.sign_in_provider == 'password';
   }
 
-  function validDeliveryZone(zone, expectedId) {
+  function validDeliveryZone(zone) {
     return zone is map
       && zone.keys().hasOnly(['id', 'name', 'areas', 'fee'])
       && zone.keys().hasAll(['id', 'name', 'areas', 'fee'])
-      && zone.id == expectedId
+      && zone.id is string
+      && zone.id.size() > 0
+      && zone.id.size() <= 40
       && zone.name is string
       && zone.name.size() > 0
       && zone.name.size() <= 60
@@ -22,17 +24,31 @@ service cloud.firestore {
       && zone.fee <= 100000;
   }
 
+  // Les règles n'ont pas de boucle : on vérifie les 12 premiers emplacements possibles.
+  function validZoneAt(zones, index) {
+    return zones.size() <= index || validDeliveryZone(zones[index]);
+  }
+
   function validDeliverySettings() {
     let data = request.resource.data;
     return data.keys().hasOnly(['zones', 'updatedAt'])
       && data.keys().hasAll(['zones', 'updatedAt'])
       && data.updatedAt is timestamp
       && data.zones is list
-      && data.zones.size() == 4
-      && validDeliveryZone(data.zones[0], 'z1')
-      && validDeliveryZone(data.zones[1], 'z2')
-      && validDeliveryZone(data.zones[2], 'z3')
-      && validDeliveryZone(data.zones[3], 'pickup');
+      && data.zones.size() >= 1
+      && data.zones.size() <= 12
+      && validZoneAt(data.zones, 0)
+      && validZoneAt(data.zones, 1)
+      && validZoneAt(data.zones, 2)
+      && validZoneAt(data.zones, 3)
+      && validZoneAt(data.zones, 4)
+      && validZoneAt(data.zones, 5)
+      && validZoneAt(data.zones, 6)
+      && validZoneAt(data.zones, 7)
+      && validZoneAt(data.zones, 8)
+      && validZoneAt(data.zones, 9)
+      && validZoneAt(data.zones, 10)
+      && validZoneAt(data.zones, 11);
   }
 
   function validWhatsAppSettings() {
