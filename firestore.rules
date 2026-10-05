@@ -81,6 +81,47 @@ service cloud.firestore {
       && data.updatedAt is timestamp;
   }
 
+  // Modification par l'admin : mêmes contrôles qu'à la création, avec les champs de suivi en plus.
+  // L'identifiant, la date de création et un numéro de facture déjà attribué ne changent jamais.
+  function validOrderUpdate(orderId) {
+    let data = request.resource.data;
+    let customer = data.customer;
+    return data.keys().hasOnly(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total', 'updatedAt', 'status', 'invoiceNumber', 'invoicedAt'])
+      && data.keys().hasAll(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total'])
+      && data.id == orderId
+      && data.id == resource.data.id
+      && data.date == resource.data.date
+      && data.createdAt == resource.data.createdAt
+      && customer is map
+      && customer.keys().hasOnly(['name', 'phone', 'address', 'zone'])
+      && customer.keys().hasAll(['name', 'phone', 'address', 'zone'])
+      && customer.name is string
+      && customer.name.size() > 0
+      && customer.name.size() <= 100
+      && customer.phone is string
+      && customer.phone.size() >= 8
+      && customer.phone.size() <= 25
+      && customer.address is string
+      && customer.address.size() > 0
+      && customer.address.size() <= 300
+      && customer.zone is string
+      && customer.zone.size() <= 200
+      && data.items is list
+      && data.items.size() > 0
+      && data.items.size() <= 50
+      && data.subtotal is number
+      && data.subtotal >= 0
+      && data.fee is number
+      && data.fee >= 0
+      && data.total is number
+      && data.total == data.subtotal + data.fee
+      && (!('status' in data) || data.status == 'cancelled')
+      && (!('updatedAt' in data) || data.updatedAt is timestamp)
+      && (!('invoicedAt' in data) || data.invoicedAt is timestamp)
+      && (!('invoiceNumber' in data) || (data.invoiceNumber is string && data.invoiceNumber.matches('^FAC-[0-9]{4}-[0-9]{4,}$')))
+      && (!('invoiceNumber' in resource.data) || data.invoiceNumber == resource.data.invoiceNumber);
+  }
+
   function validOrder(orderId) {
     let data = request.resource.data;
     let customer = data.customer;
@@ -145,7 +186,22 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow create: if request.auth != null && validOrder(orderId);
       allow read: if isAdmin();
-      allow update, delete: if false;
+      allow update: if isAdmin() && validOrderUpdate(orderId);
+      allow delete: if isAdmin();
+    }
+
+    // Compteur des numéros de facture : un par année, qui n'avance que de 1 à la fois.
+    match /counters/{counterId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && counterId.matches('^invoices-[0-9]{4}$')
+        && request.resource.data.keys().hasOnly(['year', 'last'])
+        && request.resource.data.year is int
+        && request.resource.data.last == 1;
+      allow update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['year', 'last'])
+        && request.resource.data.last == resource.data.last + 1;
+      allow delete: if false;
     }
   }
 }

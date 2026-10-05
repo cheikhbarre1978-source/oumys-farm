@@ -288,6 +288,24 @@
         </div>
     </div>
 
+    <!-- Modification d'une commande -->
+    <div id="orderEditModal" class="fixed inset-0 z-[75] hidden flex items-center justify-center bg-slate-950/70 p-2 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="orderEditTitle">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[94vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="flex items-center justify-between gap-2 px-4 py-3 bg-oumy-green text-white">
+                <h3 id="orderEditTitle" class="font-black text-sm">Modifier la commande</h3>
+                <button type="button" onclick="closeOrderEditor()" aria-label="Fermer" class="w-8 h-8 rounded-lg hover:bg-white/10"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="orderEditBody" class="flex-1 overflow-y-auto p-4 space-y-4 text-xs custom-scrollbar"></div>
+            <div class="flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-200 bg-slate-50">
+                <button type="button" onclick="deleteOrderFromEditor()" class="px-3 py-2 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold"><i class="fa-solid fa-trash"></i> Supprimer</button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="closeOrderEditor()" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900">Fermer</button>
+                    <button type="button" id="orderEditSave" onclick="saveOrderEdit()" class="px-4 py-2 rounded-xl bg-oumy-green hover:bg-teal-800 text-white text-xs font-black">Enregistrer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Visionneuse de l'album -->
     <div id="albumLightbox" class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-slate-950/90 p-3" role="dialog" aria-modal="true" aria-label="Photo de la ferme" onclick="if (event.target === this) closeAlbumPhoto()">
         <button type="button" onclick="closeAlbumPhoto()" aria-label="Fermer" class="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
@@ -2622,13 +2640,364 @@
             }
         }
 
+        // --- COMMANDES : MODIFIER, ANNULER, SUPPRIMER, FACTURER ---
+        function activeOrders() {
+            return ordersHistory.filter(order => order.status !== 'cancelled');
+        }
+
+        let orderEditor = null;
+
+        function zoneTextFor(zone) {
+            const coverage = zone.areas ? ` : ${zone.areas}` : '';
+            const price = zone.fee === 0 ? 'Gratuit' : `+${zone.fee.toLocaleString('fr-FR')} FCFA`;
+            return `${zone.name}${coverage} (${price})`;
+        }
+
+        function editorTotals() {
+            const subtotal = orderEditor.items.reduce((sum, item) => sum + Math.round((Number(item.price) || 0) * (Number(item.qty) || 0)), 0);
+            const fee = Math.max(0, Math.round(Number(orderEditor.fee) || 0));
+            return { subtotal, fee, total: subtotal + fee };
+        }
+
+        function refreshEditorTotals() {
+            if (!orderEditor) return;
+            const { subtotal, fee, total } = editorTotals();
+            orderEditor.items.forEach((item, index) => {
+                const line = document.getElementById(`editLine-${index}`);
+                if (line) line.textContent = `${Math.round((Number(item.price) || 0) * (Number(item.qty) || 0)).toLocaleString('fr-FR')} FCFA`;
+            });
+            document.getElementById('editSubtotal').textContent = `${subtotal.toLocaleString('fr-FR')} FCFA`;
+            document.getElementById('editTotal').textContent = `${total.toLocaleString('fr-FR')} FCFA`;
+        }
+
+        function renderOrderEditor() {
+            if (!orderEditor) return;
+            const order = orderEditor;
+            const itemRows = order.items.map((item, index) => `
+                <div class="grid grid-cols-12 gap-1.5 items-center bg-slate-50 rounded-xl border border-slate-200 p-2">
+                    <input value="${escapeDeliveryHtml(item.name)}" maxlength="100" oninput="updateEditorItem(${index}, 'name', this.value)" aria-label="Nom de l'article" class="col-span-12 sm:col-span-4 px-2 py-1 rounded-lg border border-slate-300 outline-none focus:border-oumy-green">
+                    <label class="col-span-4 sm:col-span-2 space-y-0.5"><span class="block text-[9px] font-bold text-slate-500">Quantité (${escapeDeliveryHtml(item.unit || 'unité')})</span>
+                        <input type="number" min="0.125" step="0.125" value="${escapeDeliveryHtml(item.qty)}" oninput="updateEditorItem(${index}, 'qty', this.value)" class="w-full px-2 py-1 rounded-lg border border-slate-300 outline-none focus:border-oumy-green"></label>
+                    <label class="col-span-4 sm:col-span-3 space-y-0.5"><span class="block text-[9px] font-bold text-slate-500">Prix unitaire (FCFA)</span>
+                        <input type="number" min="0" step="1" value="${escapeDeliveryHtml(item.price)}" oninput="updateEditorItem(${index}, 'price', this.value)" class="w-full px-2 py-1 rounded-lg border border-slate-300 outline-none focus:border-oumy-green"></label>
+                    <span id="editLine-${index}" class="col-span-3 sm:col-span-2 text-right font-extrabold text-oumy-green">0 FCFA</span>
+                    <button type="button" onclick="removeEditorItem(${index})" aria-label="Retirer cet article" class="col-span-1 w-7 h-7 rounded-lg text-rose-600 hover:bg-rose-50"><i class="fa-solid fa-trash"></i></button>
+                </div>`).join('');
+            const zoneOptions = deliveryZones.map(zone => `<option value="${escapeDeliveryHtml(zone.id)}">${escapeDeliveryHtml(zoneTextFor(zone))}</option>`).join('');
+            const productOptions = productsList.filter(product => product.category !== 'packs' || true)
+                .map(product => `<option value="${escapeDeliveryHtml(product.id)}">${escapeDeliveryHtml(product.name)} — ${product.price.toLocaleString('fr-FR')} FCFA/${escapeDeliveryHtml(product.unit || 'unité')}</option>`).join('');
+
+            document.getElementById('orderEditTitle').textContent = `Modifier la commande ${order.id}`;
+            document.getElementById('orderEditBody').innerHTML = `
+                <section class="space-y-2">
+                    <h4 class="font-black text-slate-800">Client</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="space-y-0.5"><span class="block text-[10px] font-bold text-slate-500">Nom</span><input value="${escapeDeliveryHtml(order.customer.name)}" maxlength="100" oninput="orderEditor.customer.name = this.value" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 outline-none focus:border-oumy-green"></label>
+                        <label class="space-y-0.5"><span class="block text-[10px] font-bold text-slate-500">Téléphone</span><input value="${escapeDeliveryHtml(order.customer.phone)}" maxlength="25" oninput="orderEditor.customer.phone = this.value" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 outline-none focus:border-oumy-green"></label>
+                    </div>
+                    <label class="space-y-0.5 block"><span class="block text-[10px] font-bold text-slate-500">Adresse de livraison</span><input value="${escapeDeliveryHtml(order.customer.address)}" maxlength="300" oninput="orderEditor.customer.address = this.value" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 outline-none focus:border-oumy-green"></label>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <label class="space-y-0.5 sm:col-span-2"><span class="block text-[10px] font-bold text-slate-500">Zone de livraison</span>
+                            <select id="editZoneSelect" onchange="onEditorZoneChange(this.value)" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 outline-none focus:border-oumy-green bg-white">
+                                <option value="__current">Zone actuelle : ${escapeDeliveryHtml(order.customer.zone || 'non renseignée')}</option>${zoneOptions}
+                            </select></label>
+                        <label class="space-y-0.5"><span class="block text-[10px] font-bold text-slate-500">Frais de livraison (FCFA)</span><input id="editFee" type="number" min="0" step="1" value="${escapeDeliveryHtml(order.fee)}" oninput="orderEditor.fee = this.value; refreshEditorTotals()" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 outline-none focus:border-oumy-green"></label>
+                    </div>
+                </section>
+                <section class="space-y-2">
+                    <h4 class="font-black text-slate-800">Articles</h4>
+                    <div class="space-y-1.5">${itemRows || '<p class="text-slate-400">Aucun article.</p>'}</div>
+                    <div class="flex gap-2">
+                        <select id="editAddProduct" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none focus:border-oumy-green">${productOptions}</select>
+                        <button type="button" onclick="addEditorItem()" class="shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 text-white font-bold hover:bg-slate-700"><i class="fa-solid fa-plus"></i> Ajouter</button>
+                    </div>
+                </section>
+                <section class="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-1">
+                    <div class="flex justify-between"><span class="text-slate-600">Sous-total</span><b id="editSubtotal">0 FCFA</b></div>
+                    <div class="flex justify-between text-sm"><span class="font-black text-slate-800">Total</span><b id="editTotal" class="text-oumy-green">0 FCFA</b></div>
+                </section>`;
+            refreshEditorTotals();
+        }
+
+        function openOrderEditor(orderId) {
+            const order = ordersHistory.find(item => item.id === orderId);
+            if (!order) return;
+            orderEditor = {
+                id: order.id,
+                customer: { name: order.customer?.name || '', phone: order.customer?.phone || '', address: order.customer?.address || '', zone: order.customer?.zone || '' },
+                items: (Array.isArray(order.items) ? order.items : []).map(item => ({ ...item })),
+                fee: Number(order.fee) || 0
+            };
+            renderOrderEditor();
+            document.getElementById('orderEditModal').classList.remove('hidden');
+        }
+
+        function closeOrderEditor() {
+            orderEditor = null;
+            document.getElementById('orderEditModal').classList.add('hidden');
+        }
+
+        function updateEditorItem(index, field, value) {
+            const item = orderEditor?.items[index];
+            if (!item) return;
+            item[field] = field === 'name' ? value : value;
+            refreshEditorTotals();
+        }
+
+        function removeEditorItem(index) {
+            if (!orderEditor) return;
+            orderEditor.items.splice(index, 1);
+            renderOrderEditor();
+        }
+
+        function addEditorItem() {
+            if (!orderEditor) return;
+            const product = productsList.find(item => item.id === document.getElementById('editAddProduct').value);
+            if (!product) return;
+            orderEditor.items.push({ id: product.id, name: product.name, category: product.category || '', price: product.price, unit: product.unit || 'unité', qty: isPortionProduct(product) || isHalfKiloVegetable(product) ? 1 : 1 });
+            renderOrderEditor();
+        }
+
+        function onEditorZoneChange(zoneId) {
+            if (!orderEditor || zoneId === '__current') return;
+            const zone = deliveryZones.find(item => item.id === zoneId);
+            if (!zone) return;
+            orderEditor.customer.zone = zoneTextFor(zone);
+            orderEditor.fee = zone.fee;
+            document.getElementById('editFee').value = zone.fee;
+            refreshEditorTotals();
+        }
+
+        async function saveOrderEdit() {
+            if (!orderEditor || !requireFirebaseAdmin()) return;
+            const name = orderEditor.customer.name.trim();
+            const phone = orderEditor.customer.phone.trim();
+            const address = orderEditor.customer.address.trim();
+            const items = orderEditor.items.map(item => ({
+                id: String(item.id || ''),
+                name: String(item.name || '').trim(),
+                category: String(item.category || ''),
+                price: Number(item.price),
+                unit: String(item.unit || 'unité'),
+                qty: Number(item.qty)
+            }));
+            const invalidItem = items.some(item => !item.name || !Number.isFinite(item.price) || item.price < 0 || !Number.isFinite(item.qty) || item.qty <= 0);
+            if (!name || phone.length < 8 || phone.length > 25 || !address || address.length > 300) {
+                showToast("Vérifiez le nom, le téléphone (8 à 25 caractères) et l'adresse.");
+                return;
+            }
+            if (!items.length || items.length > 50 || invalidItem) {
+                showToast("Vérifiez les articles : nom, quantité supérieure à 0 et prix valide.");
+                return;
+            }
+            const { subtotal, fee, total } = editorTotals();
+            const button = document.getElementById('orderEditSave');
+            button.disabled = true;
+            try {
+                await cloudDb.collection('orders').doc(orderEditor.id).update({
+                    customer: { name, phone, address, zone: orderEditor.customer.zone.slice(0, 200) },
+                    items, subtotal, fee, total,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast("Commande modifiée.");
+                closeOrderEditor();
+            } catch (error) {
+                showToast(error.code === 'permission-denied'
+                    ? "Modification refusée : déployez les nouvelles règles et connectez-vous en admin."
+                    : "Impossible d'enregistrer la commande.");
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function cancelOrder(orderId) {
+            if (!requireFirebaseAdmin()) return;
+            if (!confirm("Annuler cette commande ? Elle sera exclue des préparations, des livraisons, des clients et des statistiques. Vous pourrez la rétablir.")) return;
+            try {
+                await cloudDb.collection('orders').doc(orderId).update({ status: 'cancelled' });
+                showToast("Commande annulée.");
+            } catch (error) {
+                showToast("Impossible d'annuler la commande (règles à déployer ?).");
+            }
+        }
+
+        async function restoreOrder(orderId) {
+            if (!requireFirebaseAdmin()) return;
+            try {
+                await cloudDb.collection('orders').doc(orderId).update({ status: firebase.firestore.FieldValue.delete() });
+                showToast("Commande rétablie.");
+            } catch (error) {
+                showToast("Impossible de rétablir la commande.");
+            }
+        }
+
+        async function deleteOrderFromEditor() {
+            if (!orderEditor || !requireFirebaseAdmin()) return;
+            const orderId = orderEditor.id;
+            if (!confirm(`Supprimer DÉFINITIVEMENT la commande ${orderId} ? Elle disparaît des statistiques et des clients, et ne pourra pas être récupérée. Préférez « Annuler » si vous voulez en garder la trace.`)) return;
+            try {
+                const batch = cloudDb.batch();
+                batch.delete(cloudDb.collection('orders').doc(orderId));
+                batch.delete(cloudDb.collection('deliveries').doc(orderId));
+                await batch.commit();
+                tourSelection.delete(orderId);
+                closeOrderEditor();
+                showToast("Commande supprimée.");
+            } catch (error) {
+                showToast("Impossible de supprimer la commande (règles à déployer ?).");
+            }
+        }
+
+        // --- FACTURES ---
+        async function ensureInvoiceNumber(order) {
+            if (order.invoiceNumber) return order.invoiceNumber;
+            if (!requireFirebaseAdmin()) throw new Error('not-admin');
+            const year = new Date().getFullYear();
+            const counterRef = cloudDb.collection('counters').doc(`invoices-${year}`);
+            const orderRef = cloudDb.collection('orders').doc(order.id);
+            let number = '';
+            await cloudDb.runTransaction(async transaction => {
+                const orderSnapshot = await transaction.get(orderRef);
+                if (orderSnapshot.exists && orderSnapshot.data().invoiceNumber) {
+                    number = orderSnapshot.data().invoiceNumber;
+                    return;
+                }
+                const counterSnapshot = await transaction.get(counterRef);
+                const next = (counterSnapshot.exists ? Number(counterSnapshot.data().last) || 0 : 0) + 1;
+                number = `FAC-${year}-${String(next).padStart(4, '0')}`;
+                transaction.set(counterRef, { year, last: next });
+                transaction.update(orderRef, {
+                    invoiceNumber: number,
+                    invoicedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            order.invoiceNumber = number;
+            return number;
+        }
+
+        function invoiceLines(order) {
+            return (Array.isArray(order.items) ? order.items : []).map(item => {
+                const quantity = Number(item.qty) || 0;
+                const price = Number(item.price) || 0;
+                return { label: item.name || 'Article', quantity: formatOrderItemQuantity(item), price, total: Math.round(price * quantity), unit: item.unit || 'unité' };
+            });
+        }
+
+        function invoiceDateLabel(order) {
+            const timestamp = getOrderTimestamp(order);
+            return timestamp === null ? (order.date || '') : new Date(timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        function buildInvoiceHtml(order) {
+            const e = escapeDeliveryHtml;
+            const f = value => `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} FCFA`;
+            const lines = invoiceLines(order);
+            const subtotal = lines.reduce((sum, line) => sum + line.total, 0);
+            const fee = Number(order.fee) || 0;
+            const total = Number(order.total) || subtotal + fee;
+            return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Facture ${e(order.invoiceNumber)}</title>
+<style>
+*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:0;padding:24px;background:#f1f5f9}
+.page{max-width:780px;margin:0 auto;background:#fff;padding:32px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #0f766e;padding-bottom:16px;flex-wrap:wrap}
+h1{margin:0;color:#0f766e;font-size:26px}.muted{color:#64748b;font-size:13px}.title{font-size:28px;font-weight:800;text-align:right}
+.meta{display:flex;justify-content:space-between;gap:24px;margin:20px 0;flex-wrap:wrap}.meta h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b}
+table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#0f766e;color:#fff;text-align:left;padding:9px 10px;font-size:12px}
+td{padding:9px 10px;border-bottom:1px solid #e2e8f0;font-size:13px}.r{text-align:right;white-space:nowrap}
+.totals{margin:16px 0 0 auto;width:300px;max-width:100%}.totals div{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}
+.totals .grand{border-top:2px solid #0f766e;margin-top:6px;padding-top:10px;font-size:18px;font-weight:800;color:#0f766e}
+.foot{margin-top:32px;text-align:center;color:#64748b;font-size:12px}
+.actions{max-width:780px;margin:0 auto 14px;display:flex;gap:8px;justify-content:flex-end}
+button{background:#0f766e;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer}
+@media print{body{background:#fff;padding:0}.page{box-shadow:none;padding:0}.actions{display:none}}
+</style></head><body>
+<div class="actions"><button onclick="window.print()">Imprimer / Enregistrer en PDF</button></div>
+<div class="page">
+<div class="head"><div><h1>Oumy's Farm</h1><div class="muted">Du champ à la marmite</div><div class="muted">oumys-farm.com</div></div>
+<div><div class="title">FACTURE</div><div class="muted" style="text-align:right">N° ${e(order.invoiceNumber)}</div></div></div>
+<div class="meta"><div><h3>Facturé à</h3><div><b>${e(order.customer?.name || '')}</b></div><div class="muted">${e(order.customer?.phone || '')}</div><div class="muted">${e(order.customer?.address || '')}</div></div>
+<div><h3>Date</h3><div>${e(invoiceDateLabel(order))}</div><div class="muted">Commande ${e(order.id)}</div></div></div>
+<table><thead><tr><th>Article</th><th class="r">Quantité</th><th class="r">Prix unitaire</th><th class="r">Total</th></tr></thead><tbody>
+${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantity)}</td><td class="r">${e(f(line.price))} / ${e(line.unit)}</td><td class="r">${e(f(line.total))}</td></tr>`).join('')}
+</tbody></table>
+<div class="totals"><div><span>Sous-total</span><span>${e(f(subtotal))}</span></div><div><span>Livraison</span><span>${fee > 0 ? e(f(fee)) : 'Gratuite'}</span></div><div class="grand"><span>Total</span><span>${e(f(total))}</span></div></div>
+<div class="foot">Merci de votre confiance 🌱</div>
+</div></body></html>`;
+        }
+
+        async function openInvoice(orderId) {
+            const order = ordersHistory.find(item => item.id === orderId);
+            if (!order) return;
+            if (order.status === 'cancelled') { showToast("Commande annulée : pas de facture."); return; }
+            // La fenêtre est ouverte tout de suite pour ne pas être bloquée par le navigateur.
+            const win = window.open('', '_blank');
+            if (!win) { showToast("Autorisez l'ouverture de fenêtres pour afficher la facture."); return; }
+            win.document.write('<p style="font-family:Arial;padding:24px">Préparation de la facture…</p>');
+            try {
+                await ensureInvoiceNumber(order);
+                win.document.open();
+                win.document.write(buildInvoiceHtml(order));
+                win.document.close();
+                renderAdminOrders();
+            } catch (error) {
+                win.close();
+                showToast(error.code === 'permission-denied'
+                    ? "Numéro de facture refusé : déployez les nouvelles règles."
+                    : "Impossible de créer la facture.");
+            }
+        }
+
+        function buildInvoiceMessage(order) {
+            const f = value => `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} FCFA`;
+            const lines = invoiceLines(order);
+            const subtotal = lines.reduce((sum, line) => sum + line.total, 0);
+            const fee = Number(order.fee) || 0;
+            const total = Number(order.total) || subtotal + fee;
+            return [
+                `🧾 *Facture ${order.invoiceNumber}*`,
+                `Oumy's Farm — Du champ à la marmite`,
+                `Date : ${invoiceDateLabel(order)}`,
+                '',
+                `Bonjour ${whatsappSafe(order.customer?.name)},`,
+                `Voici le détail de votre commande :`,
+                ...lines.map(line => `• ${whatsappSafe(line.quantity)} ${whatsappSafe(line.label)} — ${f(line.total)}`),
+                '',
+                `Sous-total : ${f(subtotal)}`,
+                `Livraison : ${fee > 0 ? f(fee) : 'Gratuite'}`,
+                `*Total : ${f(total)}*`,
+                '',
+                'Merci de votre confiance 🌱'
+            ].join('\n');
+        }
+
+        async function sendInvoiceWhatsApp(orderId) {
+            const order = ordersHistory.find(item => item.id === orderId);
+            if (!order) return;
+            if (order.status === 'cancelled') { showToast("Commande annulée : pas de facture."); return; }
+            const base = customerWhatsAppUrl(order.customer?.phone);
+            if (!base) { showToast("Le numéro du client n'est pas valide pour WhatsApp."); return; }
+            const win = window.open('', '_blank');
+            try {
+                await ensureInvoiceNumber(order);
+                const url = `${base}?text=${encodeURIComponent(buildInvoiceMessage(order))}`;
+                if (win) win.location.href = url; else window.open(url, '_blank', 'noopener');
+                renderAdminOrders();
+            } catch (error) {
+                if (win) win.close();
+                showToast(error.code === 'permission-denied'
+                    ? "Numéro de facture refusé : déployez les nouvelles règles."
+                    : "Impossible de préparer la facture.");
+            }
+        }
+
         function buildCustomersFromOrders() {
             const normalizePhone = value => {
                 const digits = String(value || '').replace(/\D/g, '');
                 return digits.length === 12 && digits.startsWith('221') ? digits.slice(3) : digits;
             };
             const customers = new Map();
-            [...ordersHistory]
+            [...activeOrders()]
                 .sort((a, b) => (getOrderTimestamp(a) ?? 0) - (getOrderTimestamp(b) ?? 0))
                 .forEach(order => {
                     const phoneKey = normalizePhone(order.customer?.phone);
@@ -2641,7 +3010,7 @@
                     customer.name = order.customer?.name || customer.name;
                     customer.phone = order.customer?.phone || customer.phone;
                     customer.address = order.customer?.address || customer.address;
-                    customer.zone = String(order.customer?.zone || customer.zone).split(' - ')[0].trim();
+                    customer.zone = order.customer?.zone ? orderZoneName(order) : customer.zone;
                     customer.orderCount += 1;
                     customer.totalSpent += Number(order.total) || 0;
                     customer.firstOrder = Math.min(customer.firstOrder, timestamp);
@@ -2805,7 +3174,7 @@
             const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
             const dayMs = 86400000;
             const since = period === 'all' ? -Infinity : startOfToday.getTime() - (Number(period) - 1) * dayMs;
-            const orders = ordersHistory.filter(order => (getOrderTimestamp(order) ?? 0) >= since);
+            const orders = activeOrders().filter(order => (getOrderTimestamp(order) ?? 0) >= since);
 
             if (orders.length === 0) {
                 lastStats = null;
@@ -2865,7 +3234,7 @@
             // Zones de livraison
             const zones = new Map();
             orders.forEach(order => {
-                const zone = String(order.customer?.zone || '').split(' - ')[0].trim() || 'Non renseignée';
+                const zone = orderZoneName(order);
                 const current = zones.get(zone) || { count: 0, revenue: 0 };
                 current.count += 1; current.revenue += Number(order.total) || 0;
                 zones.set(zone, current);
@@ -2983,7 +3352,7 @@
         }
 
         function orderZoneName(order) {
-            return String(order.customer?.zone || '').split(' - ')[0].trim() || 'Zone non renseignée';
+            return String(order.customer?.zone || '').split(/\s+[:\-–]\s+|\s+\(/)[0].trim() || 'Zone non renseignée';
         }
 
         function buildDeliveriesMessage(orders) {
@@ -3026,7 +3395,7 @@
         }
 
         function selectedTourOrders() {
-            return ordersHistory.filter(order => tourSelection.has(order.id) && !readDelivered()[order.id]);
+            return activeOrders().filter(order => tourSelection.has(order.id) && !readDelivered()[order.id]);
         }
 
         function sendDeliveriesToWhatsApp() {
@@ -3075,7 +3444,7 @@
 
         function selectTourOrders(mode) {
             const delivered = readDelivered();
-            const pending = ordersHistory.filter(order => !delivered[order.id]);
+            const pending = activeOrders().filter(order => !delivered[order.id]);
             if (mode === 'none') {
                 tourSelection = new Set();
             } else if (mode === 'all') {
@@ -3133,8 +3502,8 @@
             if (!container) return;
             const delivered = readDelivered();
             const byAge = (a, b) => (getOrderTimestamp(a) ?? 0) - (getOrderTimestamp(b) ?? 0);
-            const pending = ordersHistory.filter(order => !delivered[order.id]).sort(byAge);
-            const done = ordersHistory.filter(order => delivered[order.id]).sort((a, b) => (delivered[b.id] || 0) - (delivered[a.id] || 0));
+            const pending = activeOrders().filter(order => !delivered[order.id]).sort(byAge);
+            const done = activeOrders().filter(order => delivered[order.id]).sort((a, b) => (delivered[b.id] || 0) - (delivered[a.id] || 0));
             // On oublie les cases cochées sur des commandes qui n'existent plus ou sont déjà livrées.
             tourSelection = new Set([...tourSelection].filter(id => pending.some(order => order.id === id)));
 
@@ -3274,13 +3643,13 @@
         function renderDailyPreparation() {
             const container = document.getElementById('adminDailyPreparation');
             if (!container) return;
-            if (ordersHistory.length === 0) {
+            if (activeOrders().length === 0) {
                 container.innerHTML = `<p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>`;
                 return;
             }
 
             const groups = new Map();
-            const sortedOrders = [...ordersHistory].sort((firstOrder, secondOrder) =>
+            const sortedOrders = [...activeOrders()].sort((firstOrder, secondOrder) =>
                 (getOrderTimestamp(secondOrder) ?? 0) - (getOrderTimestamp(firstOrder) ?? 0)
             );
             sortedOrders.forEach(order => {
@@ -3357,7 +3726,7 @@
             // Commandes regroupées par zone de livraison (tournée)
             const byZone = new Map();
             [...group.orders].reverse().forEach(ord => {
-                const zone = String(ord.customer?.zone || '').split(' - ')[0].trim() || 'Zone non renseignée';
+                const zone = orderZoneName(ord);
                 if (!byZone.has(zone)) byZone.set(zone, []);
                 byZone.get(zone).push(ord);
             });
@@ -3442,15 +3811,28 @@
                 <section class="rounded-2xl border-2 border-slate-300 bg-slate-100/70 p-2 space-y-2 mb-4">
                     ${dayBannerHtml(group, `${group.orders.length} commande${group.orders.length > 1 ? 's' : ''} · ${group.orders.reduce((sum, ord) => sum + (Number(ord.total) || 0), 0).toLocaleString('fr-FR')} FCFA`)}
                     ${group.orders.map(ord => `
-                    <div class="bg-white p-3 rounded-xl border border-slate-200 border-l-4 border-l-amber-400 space-y-2">
+                    <div class="bg-white p-3 rounded-xl border border-slate-200 border-l-4 ${ord.status === 'cancelled' ? 'border-l-rose-500 opacity-70' : 'border-l-amber-400'} space-y-2">
                         <div class="flex items-center justify-between gap-2 font-bold text-slate-900">
                             <span class="min-w-0 break-words">${escapeDeliveryHtml(ord.id)} — ${escapeDeliveryHtml(ord.customer.name)}</span>
-                            <span class="text-oumy-green shrink-0">${(Number(ord.total) || 0).toLocaleString('fr-FR')} FCFA</span>
+                            <span class="text-oumy-green shrink-0 ${ord.status === 'cancelled' ? 'line-through' : ''}">${(Number(ord.total) || 0).toLocaleString('fr-FR')} FCFA</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1">
+                            ${ord.status === 'cancelled' ? '<span class="bg-rose-100 text-rose-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Annulée</span>' : ''}
+                            ${ord.updatedAt ?'<span class="bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Modifiée</span>' : ''}
+                            ${ord.invoiceNumber ? `<span class="bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Facture ${escapeDeliveryHtml(ord.invoiceNumber)}</span>` : ''}
                         </div>
                         <p class="text-slate-500 text-[10px]">Date et heure : ${escapeDeliveryHtml(ord.date || 'Non renseignées')}</p>
                         <p class="text-slate-500 text-[10px]">📍 ${escapeDeliveryHtml(ord.customer.address)} | 📞 ${escapeDeliveryHtml(ord.customer.phone)}</p>
                         <div class="text-[11px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-100">
                             ${ord.items.map(i => `${escapeDeliveryHtml(formatOrderItemQuantity(i))} ${escapeDeliveryHtml(i.name)}`).join(', ')}
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 pt-1">
+                            <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="openOrderEditor(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-pen"></i> Modifier</button>
+                            ${ord.status === 'cancelled' ? `
+                            <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="restoreOrder(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-emerald-300 bg-white text-[10px] font-bold text-emerald-700 hover:bg-emerald-50"><i class="fa-solid fa-rotate-left"></i> Rétablir</button>` : `
+                            <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="openInvoice(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-file-invoice"></i> Facture</button>
+                            <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="sendInvoiceWhatsApp(this.dataset.id)" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700"><i class="fa-brands fa-whatsapp"></i> Envoyer au client</button>
+                            <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="cancelOrder(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-rose-200 bg-white text-[10px] font-bold text-rose-600 hover:bg-rose-50"><i class="fa-solid fa-ban"></i> Annuler</button>`}
                         </div>
                     </div>
                     `).join('')}
@@ -3475,7 +3857,9 @@
                 "Nombre de produits",
                 "Sous-total produits (FCFA)",
                 "Frais de livraison (FCFA)",
-                "Total commande (FCFA)"
+                "Total commande (FCFA)",
+                "Statut",
+                "N° facture"
             ];
             const escapeCell = value => {
                 const text = String(value ?? '');
@@ -3505,7 +3889,9 @@
                     items.length,
                     subtotal,
                     deliveryFee,
-                    total
+                    total,
+                    order.status === 'cancelled' ? 'Annulée' : 'Active',
+                    order.invoiceNumber || ''
                 ];
             });
             const csv = [headers, ...rows].map(row => row.map(escapeCell).join(';')).join('\r\n');
