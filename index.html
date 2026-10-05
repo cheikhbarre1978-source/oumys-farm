@@ -2904,6 +2904,102 @@
                 </section>`;
         }
 
+        // --- MESSAGE DE LIVRAISON POUR LE LIVREUR ---
+        function orderDayKey(order) {
+            const timestamp = getOrderTimestamp(order);
+            if (timestamp === null) return 'unknown-date';
+            const date = new Date(timestamp);
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        // Les * _ ~ du texte client casseraient la mise en forme de WhatsApp.
+        function whatsappSafe(value) {
+            return String(value ?? '').replace(/[*_~`]/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function buildDeliveriesMessage(dayKey) {
+            const orders = ordersHistory
+                .filter(order => orderDayKey(order) === dayKey)
+                .sort((a, b) => (getOrderTimestamp(a) ?? 0) - (getOrderTimestamp(b) ?? 0));
+            if (!orders.length) return '';
+
+            const timestamp = getOrderTimestamp(orders[0]);
+            const dayLabel = timestamp === null ? 'date non renseignée'
+                : new Date(timestamp).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            const formatFcfa = value => `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} FCFA`;
+            const grandTotal = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+
+            const byZone = new Map();
+            orders.forEach(order => {
+                const zone = whatsappSafe(String(order.customer?.zone || '').split(' - ')[0]) || 'Zone non renseignée';
+                if (!byZone.has(zone)) byZone.set(zone, []);
+                byZone.get(zone).push(order);
+            });
+
+            let number = 0;
+            const lines = [
+                `🚚 *Livraisons du ${dayLabel}*`,
+                `${orders.length} commande${orders.length > 1 ? 's' : ''} · Total : ${formatFcfa(grandTotal)}`,
+                ''
+            ];
+            byZone.forEach((list, zone) => {
+                lines.push(`📍 *${zone}* (${list.length})`);
+                list.forEach(order => {
+                    number += 1;
+                    const items = (Array.isArray(order.items) ? order.items : [])
+                        .map(item => `${whatsappSafe(formatOrderItemQuantity(item))} ${whatsappSafe(item.name)}`).join(', ');
+                    lines.push(
+                        `${number}. *${whatsappSafe(order.customer?.name) || 'Client'}* — 📞 ${whatsappSafe(order.customer?.phone)}`,
+                        `   🏠 ${whatsappSafe(order.customer?.address)}`,
+                        `   🛒 ${items}`,
+                        `   💰 ${formatFcfa(order.total)}`
+                    );
+                });
+                lines.push('');
+            });
+            lines.push("Merci ! — Oumy's Farm 🌱");
+            return lines.join('\n');
+        }
+
+        function sendDeliveriesToWhatsApp(dayKey) {
+            const message = buildDeliveriesMessage(dayKey);
+            if (!message) {
+                showToast("Aucune commande à livrer ce jour-là.");
+                return;
+            }
+            const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            if (url.length > 7000) {
+                // Trop long pour un lien : on copie le message et on ouvre WhatsApp pour le coller.
+                copyDeliveriesMessage(dayKey, "Message trop long pour WhatsApp : il est copié, collez-le dans la conversation du livreur.");
+                window.open('https://wa.me/', '_blank', 'noopener');
+                return;
+            }
+            window.open(url, '_blank', 'noopener');
+        }
+
+        async function copyDeliveriesMessage(dayKey, successMessage = "Message copié. Collez-le dans WhatsApp.") {
+            const message = buildDeliveriesMessage(dayKey);
+            if (!message) {
+                showToast("Aucune commande à livrer ce jour-là.");
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(message);
+                showToast(successMessage);
+            } catch (error) {
+                const area = document.createElement('textarea');
+                area.value = message;
+                area.style.position = 'fixed';
+                area.style.opacity = '0';
+                document.body.appendChild(area);
+                area.select();
+                let copied = false;
+                try { copied = document.execCommand('copy'); } catch (copyError) { }
+                document.body.removeChild(area);
+                showToast(copied ? successMessage : "Impossible de copier le message.");
+            }
+        }
+
         const PREP_CATEGORY_LABELS = {
             legumes: '🥬 Légumes & Féculents',
             packs: '📦 Pack vert',
@@ -3070,6 +3166,14 @@
                             ${progress(doneOrders, group.orders.length)}
                         </div>
                         ${orderRows}
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button type="button" onclick="sendDeliveriesToWhatsApp('${group.dayKey}')" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                            <i class="fa-brands fa-whatsapp text-base"></i> Envoyer au livreur (WhatsApp)
+                        </button>
+                        <button type="button" onclick="copyDeliveriesMessage('${group.dayKey}')" class="py-2.5 rounded-xl bg-white border-2 border-slate-300 hover:border-oumy-green text-slate-700 text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                            <i class="fa-regular fa-copy"></i> Copier le message
+                        </button>
                     </div>
                     <button type="button" onclick="resetPrepDay('${group.dayKey}')" class="w-full py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-800">Réinitialiser les cases de cette journée</button>
                 </section>`;
