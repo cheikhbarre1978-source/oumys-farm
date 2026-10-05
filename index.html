@@ -348,6 +348,9 @@
                     <button type="button" onclick="switchAdminTab('preparations')" id="tab-preparations" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
                         📦 Préparations
                     </button>
+                    <button type="button" onclick="switchAdminTab('deliveries')" id="tab-deliveries" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
+                        🚚 Livraisons
+                    </button>
                     <button type="button" onclick="switchAdminTab('album')" id="tab-album" class="admin-tab px-3 py-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 shrink-0">
                         📷 Album
                     </button>
@@ -456,6 +459,13 @@
                         <h4 class="font-bold text-xs text-slate-800">Préparations quotidiennes</h4>
                     </div>
                     <div id="adminDailyPreparation" class="space-y-4 text-xs">
+                        <p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Deliveries -->
+                <div id="adminTabDeliveries" class="admin-content flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 custom-scrollbar hidden">
+                    <div id="adminDeliveries" class="space-y-3 text-xs">
                         <p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>
                     </div>
                 </div>
@@ -1869,6 +1879,10 @@
                 document.getElementById('adminTabPreparations').classList.remove('hidden');
                 renderDailyPreparation();
                 loadAdminOrdersFromCloud();
+            } else if (tab === 'deliveries') {
+                document.getElementById('adminTabDeliveries').classList.remove('hidden');
+                renderAdminDeliveries();
+                loadAdminOrdersFromCloud();
             } else if (tab === 'album') {
                 document.getElementById('adminTabAlbum').classList.remove('hidden');
                 renderAdminAlbum();
@@ -2309,6 +2323,7 @@
                     renderDailyPreparation();
                     renderAdminStats();
                     renderAdminCustomers();
+                    renderAdminDeliveries();
                 }, () => showToast("Impossible de charger les commandes partagées."));
             } catch (error) {
                 showToast("Impossible de charger les commandes. Vérifiez la connexion et le compte admin.");
@@ -2904,12 +2919,19 @@
                 </section>`;
         }
 
-        // --- MESSAGE DE LIVRAISON POUR LE LIVREUR ---
-        function orderDayKey(order) {
-            const timestamp = getOrderTimestamp(order);
-            if (timestamp === null) return 'unknown-date';
-            const date = new Date(timestamp);
-            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        // --- LIVRAISONS : TOURNÉES COMPOSÉES À LA MAIN ---
+        const DELIVERED_STORAGE_KEY = 'oumy_delivered';
+        let tourSelection = new Set();
+        let deliveriesZoneFilter = 'all';
+        let deliveriesShowDone = false;
+
+        function readDelivered() {
+            try { return JSON.parse(localStorage.getItem(DELIVERED_STORAGE_KEY)) || {}; } catch (error) { return {}; }
+        }
+
+        function writeDelivered(map) {
+            try { localStorage.setItem(DELIVERED_STORAGE_KEY, JSON.stringify(map)); }
+            catch (error) { showToast("Impossible de mémoriser les livraisons sur cet appareil."); }
         }
 
         // Les * _ ~ du texte client casseraient la mise en forme de WhatsApp.
@@ -2917,28 +2939,27 @@
             return String(value ?? '').replace(/[*_~`]/g, '').replace(/\s+/g, ' ').trim();
         }
 
-        function buildDeliveriesMessage(dayKey) {
-            const orders = ordersHistory
-                .filter(order => orderDayKey(order) === dayKey)
-                .sort((a, b) => (getOrderTimestamp(a) ?? 0) - (getOrderTimestamp(b) ?? 0));
-            if (!orders.length) return '';
+        function orderZoneName(order) {
+            return String(order.customer?.zone || '').split(' - ')[0].trim() || 'Zone non renseignée';
+        }
 
-            const timestamp = getOrderTimestamp(orders[0]);
-            const dayLabel = timestamp === null ? 'date non renseignée'
-                : new Date(timestamp).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        function buildDeliveriesMessage(orders) {
+            if (!orders.length) return '';
             const formatFcfa = value => `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} FCFA`;
+            const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
             const grandTotal = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+            const sorted = [...orders].sort((a, b) => (getOrderTimestamp(a) ?? 0) - (getOrderTimestamp(b) ?? 0));
 
             const byZone = new Map();
-            orders.forEach(order => {
-                const zone = whatsappSafe(String(order.customer?.zone || '').split(' - ')[0]) || 'Zone non renseignée';
+            sorted.forEach(order => {
+                const zone = whatsappSafe(orderZoneName(order));
                 if (!byZone.has(zone)) byZone.set(zone, []);
                 byZone.get(zone).push(order);
             });
 
             let number = 0;
             const lines = [
-                `🚚 *Livraisons du ${dayLabel}*`,
+                `🚚 *Tournée de livraison — ${today}*`,
                 `${orders.length} commande${orders.length > 1 ? 's' : ''} · Total : ${formatFcfa(grandTotal)}`,
                 ''
             ];
@@ -2961,26 +2982,30 @@
             return lines.join('\n');
         }
 
-        function sendDeliveriesToWhatsApp(dayKey) {
-            const message = buildDeliveriesMessage(dayKey);
+        function selectedTourOrders() {
+            return ordersHistory.filter(order => tourSelection.has(order.id) && !readDelivered()[order.id]);
+        }
+
+        function sendDeliveriesToWhatsApp() {
+            const message = buildDeliveriesMessage(selectedTourOrders());
             if (!message) {
-                showToast("Aucune commande à livrer ce jour-là.");
+                showToast("Cochez au moins une commande pour la tournée.");
                 return;
             }
             const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
             if (url.length > 7000) {
                 // Trop long pour un lien : on copie le message et on ouvre WhatsApp pour le coller.
-                copyDeliveriesMessage(dayKey, "Message trop long pour WhatsApp : il est copié, collez-le dans la conversation du livreur.");
+                copyDeliveriesMessage("Message trop long pour WhatsApp : il est copié, collez-le dans la conversation du livreur.");
                 window.open('https://wa.me/', '_blank', 'noopener');
                 return;
             }
             window.open(url, '_blank', 'noopener');
         }
 
-        async function copyDeliveriesMessage(dayKey, successMessage = "Message copié. Collez-le dans WhatsApp.") {
-            const message = buildDeliveriesMessage(dayKey);
+        async function copyDeliveriesMessage(successMessage = "Message copié. Collez-le dans WhatsApp.") {
+            const message = buildDeliveriesMessage(selectedTourOrders());
             if (!message) {
-                showToast("Aucune commande à livrer ce jour-là.");
+                showToast("Cochez au moins une commande pour la tournée.");
                 return;
             }
             try {
@@ -2998,6 +3023,174 @@
                 document.body.removeChild(area);
                 showToast(copied ? successMessage : "Impossible de copier le message.");
             }
+        }
+
+        function toggleTourOrder(orderId) {
+            if (tourSelection.has(orderId)) tourSelection.delete(orderId); else tourSelection.add(orderId);
+            renderAdminDeliveries();
+        }
+
+        function selectTourOrders(mode) {
+            const delivered = readDelivered();
+            const pending = ordersHistory.filter(order => !delivered[order.id]);
+            if (mode === 'none') {
+                tourSelection = new Set();
+            } else if (mode === 'all') {
+                pending.filter(order => deliveriesZoneFilter === 'all' || orderZoneName(order) === deliveriesZoneFilter)
+                    .forEach(order => tourSelection.add(order.id));
+            }
+            renderAdminDeliveries();
+        }
+
+        function setDeliveriesZone(zone) {
+            deliveriesZoneFilter = zone;
+            renderAdminDeliveries();
+        }
+
+        function setDeliveriesShowDone(value) {
+            deliveriesShowDone = Boolean(value);
+            renderAdminDeliveries();
+        }
+
+        function markOrdersDelivered(orderIds) {
+            const delivered = readDelivered();
+            const now = Date.now();
+            orderIds.forEach(id => { delivered[id] = now; tourSelection.delete(id); });
+            writeDelivered(delivered);
+            renderAdminDeliveries();
+        }
+
+        function markTourDelivered() {
+            const orders = selectedTourOrders();
+            if (!orders.length) {
+                showToast("Cochez au moins une commande.");
+                return;
+            }
+            if (!confirm(`Marquer ${orders.length} commande${orders.length > 1 ? 's' : ''} comme livrée${orders.length > 1 ? 's' : ''} ?`)) return;
+            markOrdersDelivered(orders.map(order => order.id));
+            showToast("Commandes marquées comme livrées.");
+        }
+
+        function restoreOrderToDeliver(orderId) {
+            const delivered = readDelivered();
+            delete delivered[orderId];
+            writeDelivered(delivered);
+            renderAdminDeliveries();
+        }
+
+        function orderAgeLabel(order) {
+            const timestamp = getOrderTimestamp(order);
+            if (timestamp === null) return { text: '', level: 0 };
+            const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+            const orderDay = new Date(timestamp); orderDay.setHours(0, 0, 0, 0);
+            const days = Math.max(0, Math.round((startOfToday - orderDay) / 86400000));
+            if (days === 0) return { text: "commandée aujourd'hui", level: 0 };
+            if (days === 1) return { text: 'commandée hier', level: 0 };
+            return { text: `commandée il y a ${days} jours`, level: days >= 4 ? 2 : 1 };
+        }
+
+        function renderAdminDeliveries() {
+            const container = document.getElementById('adminDeliveries');
+            if (!container) return;
+            const delivered = readDelivered();
+            const byAge = (a, b) => (getOrderTimestamp(a) ?? 0) - (getOrderTimestamp(b) ?? 0);
+            const pending = ordersHistory.filter(order => !delivered[order.id]).sort(byAge);
+            const done = ordersHistory.filter(order => delivered[order.id]).sort((a, b) => (delivered[b.id] || 0) - (delivered[a.id] || 0));
+            // On oublie les cases cochées sur des commandes qui n'existent plus ou sont déjà livrées.
+            tourSelection = new Set([...tourSelection].filter(id => pending.some(order => order.id === id)));
+
+            if (!pending.length && !done.length) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>`;
+                return;
+            }
+
+            const formatFcfa = value => `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} FCFA`;
+            const zones = [...new Set(pending.map(orderZoneName))].sort((a, b) => a.localeCompare(b, 'fr'));
+            if (deliveriesZoneFilter !== 'all' && !zones.includes(deliveriesZoneFilter)) deliveriesZoneFilter = 'all';
+            const visible = pending.filter(order => deliveriesZoneFilter === 'all' || orderZoneName(order) === deliveriesZoneFilter);
+
+            const zoneChip = (value, label, count) => `<button type="button" data-zone="${escapeDeliveryHtml(value)}" onclick="setDeliveriesZone(this.dataset.zone)" aria-pressed="${deliveriesZoneFilter === value}" class="shrink-0 px-3 py-1.5 rounded-xl border-2 text-[11px] font-bold ${deliveriesZoneFilter === value ? 'bg-oumy-green border-oumy-green text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">${escapeDeliveryHtml(label)} <span class="opacity-80">(${count})</span></button>`;
+            const zoneChips = zoneChip('all', 'Toutes', pending.length) + zones.map(zone => zoneChip(zone, zone, pending.filter(order => orderZoneName(order) === zone).length)).join('');
+
+            const orderCard = (order, isDone) => {
+                const items = Array.isArray(order.items) ? order.items : [];
+                const age = orderAgeLabel(order);
+                const checked = tourSelection.has(order.id);
+                const ageClass = age.level === 2 ? 'bg-rose-100 text-rose-800' : age.level === 1 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600';
+                return `
+                <div class="bg-white rounded-xl border-2 ${checked ? 'border-oumy-green' : 'border-slate-200'} p-3 flex items-start gap-3 ${isDone ? 'opacity-60' : ''}">
+                    ${isDone ? '' : `<input type="checkbox" ${checked ? 'checked' : ''} data-id="${escapeDeliveryHtml(order.id)}" onchange="toggleTourOrder(this.dataset.id)" aria-label="Ajouter à la tournée" class="w-5 h-5 mt-0.5 accent-emerald-700 shrink-0">`}
+                    <div class="min-w-0 flex-1 space-y-0.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <span class="font-extrabold text-slate-900 break-words">${escapeDeliveryHtml(order.customer?.name || 'Client')}</span>
+                            <span class="font-extrabold text-oumy-green shrink-0">${formatFcfa(order.total)}</span>
+                        </div>
+                        <p class="text-[10px] text-slate-500">📍 ${escapeDeliveryHtml(order.customer?.address || '')} · 🚚 ${escapeDeliveryHtml(orderZoneName(order))} · 📞 ${escapeDeliveryHtml(order.customer?.phone || '')}</p>
+                        <p class="text-[11px] text-slate-700">${items.map(i => `${escapeDeliveryHtml(formatOrderItemQuantity(i))} ${escapeDeliveryHtml(i.name)}`).join(', ')}</p>
+                        <div class="flex items-center justify-between gap-2 pt-1">
+                            ${isDone
+                                ? `<span class="text-[10px] font-bold text-emerald-700">✓ Livrée le ${new Date(readDelivered()[order.id] || 0).toLocaleDateString('fr-FR')}</span>
+                                   <button type="button" data-id="${escapeDeliveryHtml(order.id)}" onclick="restoreOrderToDeliver(this.dataset.id)" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 underline">Remettre à livrer</button>`
+                                : `${age.text ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${ageClass}">${age.text}</span>` : '<span></span>'}
+                                   <button type="button" data-id="${escapeDeliveryHtml(order.id)}" onclick="markOrdersDelivered([this.dataset.id])" class="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 underline">Marquer livrée</button>`}
+                        </div>
+                    </div>
+                </div>`;
+            };
+
+            // Quantités à préparer pour la sélection
+            const selected = selectedTourOrders();
+            const totals = new Map();
+            selected.forEach(order => (Array.isArray(order.items) ? order.items : []).forEach(item => {
+                const quantity = Number(item.qty) || 0;
+                if (quantity <= 0) return;
+                const unit = item.unit || 'unité';
+                const key = `${item.id || item.name}::${unit}`;
+                const current = totals.get(key) || { name: item.name || 'Article', unit, quantity: 0 };
+                current.quantity += quantity;
+                totals.set(key, current);
+            }));
+            const selectedTotal = selected.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+            const prepRows = [...totals.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(product => `
+                <div class="flex items-center justify-between gap-3 py-1 border-b border-slate-100 last:border-0">
+                    <span class="min-w-0 truncate text-slate-700">${escapeDeliveryHtml(product.name)}</span>
+                    <span class="shrink-0 font-extrabold text-oumy-green">${formatQuantity(product.quantity)} ${escapeDeliveryHtml(product.unit)}</span>
+                </div>`).join('');
+
+            container.innerHTML = `
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 class="font-bold text-xs text-slate-800">Commandes à livrer <span class="font-semibold text-slate-500">(${pending.length} en attente)</span></h4>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="selectTourOrders('all')" class="px-2.5 py-1 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-700 hover:bg-slate-100">Tout cocher${deliveriesZoneFilter === 'all' ? '' : ' (zone)'}</button>
+                        <button type="button" onclick="selectTourOrders('none')" class="px-2.5 py-1 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-700 hover:bg-slate-100">Tout décocher</button>
+                    </div>
+                </div>
+                <div class="flex gap-2 overflow-x-auto pb-1 custom-scrollbar" role="group" aria-label="Filtrer par zone">${zoneChips}</div>
+
+                ${selected.length ? `
+                <section class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-3 space-y-2">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <p class="font-black text-emerald-900">🚚 Tournée : ${selected.length} commande${selected.length > 1 ? 's' : ''} · ${formatFcfa(selectedTotal)}</p>
+                    </div>
+                    <div class="bg-white rounded-xl border border-emerald-100 px-3 py-1.5">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-slate-500 pb-1">À préparer pour cette tournée</p>
+                        ${prepRows}
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <button type="button" onclick="sendDeliveriesToWhatsApp()" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-transform"><i class="fa-brands fa-whatsapp text-base"></i> Envoyer au livreur</button>
+                        <button type="button" onclick="copyDeliveriesMessage()" class="py-2.5 rounded-xl bg-white border-2 border-slate-300 hover:border-oumy-green text-slate-700 text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-transform"><i class="fa-regular fa-copy"></i> Copier le message</button>
+                        <button type="button" onclick="markTourDelivered()" class="py-2.5 rounded-xl bg-white border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-transform"><i class="fa-solid fa-check"></i> Marquer livrées</button>
+                    </div>
+                </section>` : `<p class="text-[11px] text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-xl px-3 py-2">Cochez les commandes à livrer ensemble : le message du livreur et les quantités à préparer se construisent à partir de votre sélection.</p>`}
+
+                <div class="space-y-2">
+                    ${visible.length ? visible.map(order => orderCard(order, false)).join('') : '<p class="text-center text-slate-400 py-6">Aucune commande à livrer dans cette zone.</p>'}
+                </div>
+
+                <label class="flex items-center gap-2 pt-2 text-[11px] font-bold text-slate-600 cursor-pointer">
+                    <input type="checkbox" ${deliveriesShowDone ? 'checked' : ''} onchange="setDeliveriesShowDone(this.checked)" class="w-4 h-4 accent-emerald-700"> Afficher les commandes déjà livrées (${done.length})
+                </label>
+                ${deliveriesShowDone ? `<div class="space-y-2">${done.map(order => orderCard(order, true)).join('') || '<p class="text-center text-slate-400 py-3">Aucune commande livrée.</p>'}</div>` : ''}`;
         }
 
         const PREP_CATEGORY_LABELS = {
@@ -3167,14 +3360,7 @@
                         </div>
                         ${orderRows}
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <button type="button" onclick="sendDeliveriesToWhatsApp('${group.dayKey}')" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                            <i class="fa-brands fa-whatsapp text-base"></i> Envoyer au livreur (WhatsApp)
-                        </button>
-                        <button type="button" onclick="copyDeliveriesMessage('${group.dayKey}')" class="py-2.5 rounded-xl bg-white border-2 border-slate-300 hover:border-oumy-green text-slate-700 text-xs font-black flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                            <i class="fa-regular fa-copy"></i> Copier le message
-                        </button>
-                    </div>
+                    <p class="text-[10px] text-slate-500 text-center px-2">Pour organiser une tournée de livraison (toutes dates confondues), utilisez l'onglet <b>🚚 Livraisons</b>.</p>
                     <button type="button" onclick="resetPrepDay('${group.dayKey}')" class="w-full py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-800">Réinitialiser les cases de cette journée</button>
                 </section>`;
         }
