@@ -2325,6 +2325,14 @@
                     renderAdminCustomers();
                     renderAdminDeliveries();
                 }, () => showToast("Impossible de charger les commandes partagées."));
+
+                cloudDb.collection('deliveries').onSnapshot(snapshot => {
+                    cloudDelivered = {};
+                    snapshot.docs.forEach(document => {
+                        cloudDelivered[document.id] = document.data().deliveredAt?.toMillis?.() || Date.now();
+                    });
+                    renderAdminDeliveries();
+                }, () => { /* partage indisponible : on garde le secours local */ });
             } catch (error) {
                 showToast("Impossible de charger les commandes. Vérifiez la connexion et le compte admin.");
             }
@@ -2925,13 +2933,48 @@
         let deliveriesZoneFilter = 'all';
         let deliveriesShowDone = false;
 
-        function readDelivered() {
+        // Statut « livré » partagé via la collection Firestore `deliveries` ; la mémoire de
+        // l'appareil ne sert que de secours si le partage est indisponible.
+        let cloudDelivered = {};
+
+        function readLocalDelivered() {
             try { return JSON.parse(localStorage.getItem(DELIVERED_STORAGE_KEY)) || {}; } catch (error) { return {}; }
         }
 
-        function writeDelivered(map) {
+        function writeLocalDelivered(map) {
             try { localStorage.setItem(DELIVERED_STORAGE_KEY, JSON.stringify(map)); }
             catch (error) { showToast("Impossible de mémoriser les livraisons sur cet appareil."); }
+        }
+
+        function readDelivered() {
+            return { ...readLocalDelivered(), ...cloudDelivered };
+        }
+
+        async function saveDeliveredStatus(orderIds, delivered) {
+            const when = Date.now();
+            try {
+                if (!cloudDb || !isFirebaseAdminUser()) throw new Error('cloud-unavailable');
+                const batch = cloudDb.batch();
+                orderIds.forEach(id => {
+                    const ref = cloudDb.collection('deliveries').doc(id);
+                    if (delivered) batch.set(ref, { orderId: id, deliveredAt: firebase.firestore.FieldValue.serverTimestamp() });
+                    else batch.delete(ref);
+                });
+                await batch.commit();
+                // Le serveur fait foi : on retire d'éventuels restes de la mémoire locale.
+                const local = readLocalDelivered();
+                orderIds.forEach(id => delete local[id]);
+                writeLocalDelivered(local);
+                orderIds.forEach(id => { if (delivered) cloudDelivered[id] = when; else delete cloudDelivered[id]; });
+                return true;
+            } catch (error) {
+                const local = readLocalDelivered();
+                orderIds.forEach(id => { if (delivered) local[id] = when; else delete local[id]; });
+                writeLocalDelivered(local);
+                orderIds.forEach(id => { if (!delivered) delete cloudDelivered[id]; });
+                showToast("Partage indisponible : le statut est gardé sur cet appareil seulement.");
+                return false;
+            }
         }
 
         // Les * _ ~ du texte client casseraient la mise en forme de WhatsApp.
@@ -3052,29 +3095,25 @@
             renderAdminDeliveries();
         }
 
-        function markOrdersDelivered(orderIds) {
-            const delivered = readDelivered();
-            const now = Date.now();
-            orderIds.forEach(id => { delivered[id] = now; tourSelection.delete(id); });
-            writeDelivered(delivered);
+        async function markOrdersDelivered(orderIds) {
+            orderIds.forEach(id => tourSelection.delete(id));
+            await saveDeliveredStatus(orderIds, true);
             renderAdminDeliveries();
         }
 
-        function markTourDelivered() {
+        async function markTourDelivered() {
             const orders = selectedTourOrders();
             if (!orders.length) {
                 showToast("Cochez au moins une commande.");
                 return;
             }
             if (!confirm(`Marquer ${orders.length} commande${orders.length > 1 ? 's' : ''} comme livrée${orders.length > 1 ? 's' : ''} ?`)) return;
-            markOrdersDelivered(orders.map(order => order.id));
+            await markOrdersDelivered(orders.map(order => order.id));
             showToast("Commandes marquées comme livrées.");
         }
 
-        function restoreOrderToDeliver(orderId) {
-            const delivered = readDelivered();
-            delete delivered[orderId];
-            writeDelivered(delivered);
+        async function restoreOrderToDeliver(orderId) {
+            await saveDeliveredStatus([orderId], false);
             renderAdminDeliveries();
         }
 

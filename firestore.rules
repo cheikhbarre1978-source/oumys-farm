@@ -64,6 +64,14 @@ service cloud.firestore {
       && data.createdAt is timestamp;
   }
 
+  function validDelivery(orderId) {
+    let data = request.resource.data;
+    return data.keys().hasOnly(['orderId', 'deliveredAt'])
+      && data.keys().hasAll(['orderId', 'deliveredAt'])
+      && data.orderId == orderId
+      && data.deliveredAt is timestamp;
+  }
+
   function validWhatsAppSettings() {
     let data = request.resource.data;
     return data.keys().hasOnly(['phone', 'updatedAt'])
@@ -124,6 +132,13 @@ service cloud.firestore {
     match /farmAlbum/{photoId} {
       allow read: if true;
       allow create, update: if isAdmin() && validAlbumPhoto(photoId);
+      allow delete: if isAdmin();
+    }
+
+    // Statut « livré » des commandes : aucune donnée client, réservé à l'admin.
+    match /deliveries/{orderId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && validDelivery(orderId);
       allow delete: if isAdmin();
     }
 
