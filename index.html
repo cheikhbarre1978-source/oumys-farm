@@ -95,6 +95,9 @@
     <!-- Main Content Container -->
     <main class="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 space-y-4">
 
+        <!-- Rappel : commande récente encore modifiable par le client -->
+        <div id="myOrderBar" class="hidden rounded-2xl border-2 border-amber-400 bg-amber-50 px-3.5 py-3 flex items-center justify-between gap-3 flex-wrap" role="status"></div>
+
         <!-- Accueil : présentation et album de la ferme -->
         <section id="accueil" aria-labelledby="accueilTitle" class="space-y-3">
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-900 via-oumy-green to-teal-800 text-white p-4 sm:p-6 shadow-lg border border-teal-700/40">
@@ -285,7 +288,33 @@
             <a id="orderWhatsAppLink" href="#" target="_blank" rel="noopener noreferrer" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2">
                 <i class="fa-brands fa-whatsapp text-lg"></i> Transmettre sur WhatsApp
             </a>
+            <button type="button" id="orderEditButton" onclick="editFromConfirmation()" class="hidden w-full py-2.5 bg-white border-2 border-amber-400 hover:bg-amber-50 text-amber-900 font-black text-xs rounded-xl">
+                <i class="fa-solid fa-pen"></i> Une erreur ou un oubli ? Modifier ma commande
+            </button>
+            <p id="orderEditHint" class="hidden text-[11px] text-slate-500 -mt-2"></p>
             <button type="button" onclick="closeOrderConfirmationModal()" class="w-full py-2 text-xs font-bold text-slate-600 hover:text-slate-900">Retourner au marché</button>
+        </div>
+    </div>
+
+    <!-- Le client modifie les quantités de sa commande récente -->
+    <div id="myOrderModal" class="fixed inset-0 z-[65] hidden flex items-end sm:items-center justify-center bg-slate-950/70 p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="myOrderTitle">
+        <div class="bg-white rounded-t-2xl sm:rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="flex items-center justify-between gap-2 px-4 py-3 bg-oumy-green text-white">
+                <div class="min-w-0">
+                    <h3 id="myOrderTitle" class="font-black text-sm">Modifier ma commande</h3>
+                    <p id="myOrderSubtitle" class="text-[11px] text-teal-100 truncate"></p>
+                </div>
+                <button type="button" onclick="closeMyOrderEditor()" aria-label="Fermer" class="w-8 h-8 rounded-lg hover:bg-white/10"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="myOrderBody" class="flex-1 overflow-y-auto p-4 space-y-3 text-xs"></div>
+            <div class="px-4 py-3 border-t border-slate-200 bg-slate-50 space-y-2">
+                <div class="flex justify-between items-baseline"><span class="text-xs font-bold text-slate-600">Nouveau total (livraison comprise)</span><b id="myOrderTotal" class="text-base text-oumy-green">0 FCFA</b></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="closeMyOrderEditor()" class="py-2.5 rounded-xl border-2 border-slate-300 text-slate-700 text-xs font-black hover:bg-slate-100">Fermer</button>
+                    <button type="button" id="myOrderSave" onclick="saveMyOrderEdit()" class="py-2.5 rounded-xl bg-oumy-green hover:bg-teal-800 text-white text-xs font-black">Enregistrer</button>
+                </div>
+                <p class="text-[10px] text-slate-500 text-center">Les produits ajoutés partent avec cette commande, sans frais de livraison en plus. Pour annuler, écrivez-nous sur WhatsApp.</p>
+            </div>
         </div>
     </div>
 
@@ -1087,6 +1116,8 @@
             renderProducts();
             renderFarmAlbum();
             updateCartUI();
+            renderMyOrderBar();
+            window.setInterval(renderMyOrderBar, 30000);
             initializeCloudSync();
         });
 
@@ -1544,7 +1575,16 @@
             if (modal) modal.classList.add('hidden');
         }
 
+        let confirmationOrderId = null;
+
         function showOrderConfirmation(orderId, whatsappUrl, historySaved = true) {
+            confirmationOrderId = orderId;
+            const editable = editableMyOrders().some(order => order.id === orderId);
+            document.getElementById('orderEditButton').classList.toggle('hidden', !editable);
+            const hint = document.getElementById('orderEditHint');
+            hint.classList.toggle('hidden', !editable);
+            hint.textContent = "Vous pouvez changer les quantités ou ajouter des produits tant que la ferme n'a pas préparé votre commande.";
+            renderMyOrderBar();
             document.getElementById('orderConfirmationId').textContent = orderId;
             document.getElementById('orderWhatsAppLink').href = whatsappUrl;
             document.getElementById('orderStorageWarning').classList.toggle('hidden', historySaved);
@@ -1738,8 +1778,13 @@
 
             const total = subtotal + fee;
 
+            // Référence difficile à deviner : c'est elle qui permet au client de modifier sa commande.
+            const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(8)), byte => byte.toString(36).padStart(2, '0')).join('').slice(0, 10);
+            const orderId = `ORD-${Date.now()}-${randomPart}`;
+
             // Construct WhatsApp Message
-            let msg = `*NOUVELLE COMMANDE — OUMY'S FARM* 🇸🇳\n\n`;
+            let msg = `*NOUVELLE COMMANDE — OUMY'S FARM* 🇸🇳\n`;
+            msg += `🧾 *Réf :* ${orderId}\n\n`;
             msg += `👤 *Client :* ${name}\n`;
             msg += `📞 *Tel :* ${phone}\n`;
             msg += `📍 *Adresse :* ${address}\n`;
@@ -1757,7 +1802,7 @@
 
             // Save order locally for admin history
             const newOrder = {
-                id: `ORD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                id: orderId,
                 date: new Date().toLocaleString('fr-FR'),
                 customer: { name, phone, address, zone: zoneText },
                 items: cartItems.map(item => ({
@@ -1792,6 +1837,7 @@
                 return;
             }
 
+            rememberMyOrder(newOrder);
             ordersHistory.unshift(newOrder);
             let historySaved = true;
             try {
@@ -2374,7 +2420,9 @@
                     snapshot.docs.forEach(document => {
                         const order = document.data();
                         const orderId = order.id || document.id;
-                        ordersById.set(orderId, { ...order, id: orderId });
+                        // Une ligne mise à zéro par le client est une ligne retirée : on ne l'affiche plus.
+                        const keptItems = (Array.isArray(order.items) ? order.items : []).filter(item => Number(item.qty) > 0);
+                        ordersById.set(orderId, { ...order, id: orderId, items: keptItems });
                     });
                     ordersHistory = [...ordersById.values()].sort((firstOrder, secondOrder) =>
                         (getOrderTimestamp(secondOrder) ?? 0) - (getOrderTimestamp(firstOrder) ?? 0)
@@ -2500,6 +2548,244 @@
                     ? "Refusé : déployez les nouvelles règles et connectez-vous en admin."
                     : "Impossible d'enregistrer le message.");
             }
+        }
+
+        // --- LE CLIENT MODIFIE SA COMMANDE (quantités, ajouts) TANT QUE LA FERME NE L'A PAS VERROUILLÉE ---
+        const MY_ORDERS_KEY = 'oumy_my_orders';
+        const CLIENT_EDIT_WINDOW_MS = 7 * 24 * 3600 * 1000; // doit rester égal à la durée écrite dans firestore.rules
+        const MAX_ORDER_LINES = 20;                           // idem : limites des règles
+        const MAX_ADDED_LINES = 8;
+        let myOrderEditor = null;
+
+        function readMyOrders() {
+            try {
+                const list = JSON.parse(localStorage.getItem(MY_ORDERS_KEY));
+                return Array.isArray(list) ? list : [];
+            } catch (error) { return []; }
+        }
+
+        function writeMyOrders(list) {
+            try { localStorage.setItem(MY_ORDERS_KEY, JSON.stringify(list)); } catch (error) { }
+        }
+
+        function rememberMyOrder(order) {
+            const now = Date.now();
+            const list = readMyOrders().filter(item => now - item.createdAtMs < CLIENT_EDIT_WINDOW_MS && item.id !== order.id);
+            list.unshift({ id: order.id, createdAtMs: now, fee: order.fee, items: order.items.map(item => ({ ...item })), closed: false });
+            writeMyOrders(list.slice(0, 10));
+        }
+
+        function editableMyOrders() {
+            const now = Date.now();
+            return readMyOrders().filter(order => !order.closed && now - order.createdAtMs < CLIENT_EDIT_WINDOW_MS && order.items.length <= MAX_ORDER_LINES);
+        }
+
+        function closeMyOrderForEditing(orderId) {
+            writeMyOrders(readMyOrders().map(order => order.id === orderId ? { ...order, closed: true } : order));
+            renderMyOrderBar();
+        }
+
+        function renderMyOrderBar() {
+            const bar = document.getElementById('myOrderBar');
+            if (!bar) return;
+            const orders = editableMyOrders().slice(0, 3);
+            bar.classList.toggle('hidden', !orders.length);
+            if (!orders.length) return;
+            bar.innerHTML = `
+                <div class="min-w-0 flex-1 space-y-2">
+                    <p class="text-xs font-black text-amber-950">${orders.length > 1 ? 'Vos commandes peuvent encore être modifiées' : 'Votre commande peut encore être modifiée'}</p>
+                    <p class="text-[11px] text-amber-900">Changez une quantité ou ajoutez un oubli, tant que la ferme n'a pas préparé la commande.</p>
+                    ${orders.map(order => `
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <span class="text-[11px] text-amber-900">Réf. <span class="font-mono break-all">${escapeDeliveryHtml(order.id)}</span></span>
+                        <button type="button" data-id="${escapeDeliveryHtml(order.id)}" onclick="openMyOrderEditor(this.dataset.id)" class="shrink-0 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black active:scale-95 transition-transform"><i class="fa-solid fa-pen"></i> Modifier ma commande</button>
+                    </div>`).join('')}
+                </div>`;
+        }
+
+        function editFromConfirmation() {
+            closeOrderConfirmationModal();
+            if (confirmationOrderId) openMyOrderEditor(confirmationOrderId);
+        }
+
+        function myEditorTotals() {
+            const subtotal = myOrderEditor.items.reduce((sum, item) => sum + Math.round((Number(item.price) || 0) * (Number(item.qty) || 0)), 0);
+            return { subtotal, total: subtotal + (Number(myOrderEditor.fee) || 0) };
+        }
+
+        function myOrderAddedCount() {
+            return myOrderEditor.items.length - myOrderEditor.original.length;
+        }
+
+        function renderMyOrderEditor() {
+            const editor = myOrderEditor;
+            if (!editor) return;
+            const formatFcfa = value => `${Math.round(value).toLocaleString('fr-FR')} FCFA`;
+            const rows = editor.items.map((item, index) => {
+                const isNew = index >= editor.original.length;
+                const removed = Number(item.qty) <= 0;
+                const original = editor.original[index];
+                const unitInfo = `${formatFcfa(item.price)} / ${escapeDeliveryHtml(item.unit || 'unité')}`;
+                const chips = !removed && isPortionProduct(item)
+                    ? `<div class="flex gap-1 mt-2" role="group" aria-label="Quantité de ${escapeDeliveryHtml(item.name)}">${PORTION_CHOICES.map(choice => `<button type="button" onclick="setMyOrderItemQty(${index}, ${choice.qty})" aria-pressed="${Number(item.qty) === choice.qty}" class="flex-1 py-1.5 rounded-lg text-[11px] font-bold border ${Number(item.qty) === choice.qty ? 'bg-amber-400 border-amber-400 text-slate-950' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">${choice.label}</button>`).join('')}</div>`
+                    : '';
+                const before = !isNew && Number(original.qty) !== Number(item.qty) ? ` · avant : ${escapeDeliveryHtml(formatOrderItemQuantity(original))}` : '';
+                const control = removed
+                    ? `<button type="button" onclick="setMyOrderItemQty(${index}, ${!isNew && Number(original.qty) > 0 ? Number(original.qty) : 1})" class="px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 text-[11px] font-bold hover:bg-emerald-50"><i class="fa-solid fa-rotate-left"></i> Remettre</button><span></span>`
+                    : `<button type="button" onclick="${isNew ? `removeNewMyOrderItem(${index})` : `setMyOrderItemQty(${index}, 0)`}" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 text-[11px] font-bold hover:bg-rose-50"><i class="fa-solid fa-trash"></i> Retirer</button>
+                       <div class="flex items-center border-2 border-slate-300 rounded-xl overflow-hidden bg-slate-50">
+                           <button type="button" onclick="stepMyOrderItem(${index}, -1)" aria-label="Diminuer" class="w-10 h-9 hover:bg-slate-200 text-slate-700 font-black text-base">−</button>
+                           <span class="px-3 min-w-[4.5rem] text-center font-extrabold text-slate-900">${escapeDeliveryHtml(isHalfKiloVegetable(item) ? formatKgQuantity(item) : formatQuantity(item.qty))}</span>
+                           <button type="button" onclick="stepMyOrderItem(${index}, 1)" aria-label="Augmenter" class="w-10 h-9 hover:bg-slate-200 text-slate-700 font-black text-base">+</button>
+                       </div>`;
+                return `
+                <div class="rounded-xl border-2 ${removed ? 'border-rose-200 bg-rose-50/50' : isNew ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-white'} p-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <p class="font-extrabold text-slate-900 ${removed ? 'line-through opacity-60' : ''}">${escapeDeliveryHtml(item.name)}${isNew ? ' <span class="ml-1 bg-emerald-600 text-white text-[9px] font-black uppercase px-1.5 py-0.5 rounded align-middle">Ajouté</span>' : ''}</p>
+                            <p class="text-[10px] text-slate-500">${unitInfo}${before}</p>
+                        </div>
+                        <span class="shrink-0 font-extrabold ${removed ? 'text-rose-600' : 'text-oumy-green'}">${removed ? 'Retiré' : formatFcfa(Math.round(item.price * item.qty))}</span>
+                    </div>
+                    ${chips}
+                    <div class="flex items-center justify-between gap-2 mt-2">${control}</div>
+                </div>`;
+            }).join('');
+
+            const canAdd = editor.items.length < MAX_ORDER_LINES && myOrderAddedCount() < MAX_ADDED_LINES;
+            const products = productsList.filter(product => product.inStock !== false && Number(product.price) > 0)
+                .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+            const adder = canAdd ? `
+                <div class="rounded-xl border-2 border-dashed border-slate-300 p-3 space-y-2">
+                    <p class="font-black text-slate-800"><i class="fa-solid fa-plus"></i> Ajouter un produit oublié</p>
+                    <div class="flex gap-2">
+                        <select id="myOrderAddProduct" aria-label="Produit à ajouter" class="flex-1 min-w-0 px-2.5 py-2 rounded-lg border border-slate-300 bg-white outline-none focus:border-oumy-green text-xs">
+                            ${products.map(product => `<option value="${escapeDeliveryHtml(product.id)}">${escapeDeliveryHtml(product.name)} — ${Number(product.price).toLocaleString('fr-FR')} FCFA / ${escapeDeliveryHtml(product.unit || 'unité')}</option>`).join('')}
+                        </select>
+                        <button type="button" onclick="addMyOrderItem()" class="shrink-0 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold">Ajouter</button>
+                    </div>
+                </div>` : `<p class="text-[11px] text-slate-500 text-center">Nombre maximum de produits ajoutés atteint. Écrivez-nous pour le reste.</p>`;
+            document.getElementById('myOrderBody').innerHTML = rows + adder;
+            document.getElementById('myOrderTotal').textContent = formatFcfa(myEditorTotals().total);
+        }
+
+        function openMyOrderEditor(orderId) {
+            const order = editableMyOrders().find(item => item.id === orderId);
+            if (!order) {
+                showToast("Cette commande ne peut plus être modifiée. Écrivez-nous sur WhatsApp.");
+                renderMyOrderBar();
+                return;
+            }
+            myOrderEditor = {
+                id: order.id,
+                fee: Number(order.fee) || 0,
+                original: order.items.map(item => ({ ...item })),
+                items: order.items.map(item => ({ ...item }))
+            };
+            document.getElementById('myOrderSubtitle').textContent = `Référence ${order.id}`;
+            renderMyOrderEditor();
+            document.getElementById('myOrderModal').classList.remove('hidden');
+        }
+
+        function closeMyOrderEditor() {
+            myOrderEditor = null;
+            document.getElementById('myOrderModal').classList.add('hidden');
+        }
+
+        function setMyOrderItemQty(index, qty) {
+            const item = myOrderEditor?.items[index];
+            if (!item) return;
+            item.qty = Math.max(0, Math.min(100, Math.round(Number(qty) * 8) / 8));
+            renderMyOrderEditor();
+        }
+
+        function stepMyOrderItem(index, direction) {
+            const item = myOrderEditor?.items[index];
+            if (!item) return;
+            setMyOrderItemQty(index, Number(item.qty) + direction * cartStep(item, direction));
+        }
+
+        function removeNewMyOrderItem(index) {
+            if (!myOrderEditor || index < myOrderEditor.original.length) return;
+            myOrderEditor.items.splice(index, 1);
+            renderMyOrderEditor();
+        }
+
+        function addMyOrderItem() {
+            const editor = myOrderEditor;
+            if (!editor) return;
+            const product = productsList.find(item => item.id === document.getElementById('myOrderAddProduct')?.value);
+            if (!product) return;
+            const existingIndex = editor.items.findIndex(item => item.id === product.id);
+            if (existingIndex >= 0) {
+                if (Number(editor.items[existingIndex].qty) <= 0) {
+                    setMyOrderItemQty(existingIndex, 1);
+                    showToast(`« ${product.name} » remis dans votre commande.`);
+                } else {
+                    showToast(`« ${product.name} » est déjà dans votre commande : changez sa quantité.`);
+                }
+                return;
+            }
+            if (editor.items.length >= MAX_ORDER_LINES || myOrderAddedCount() >= MAX_ADDED_LINES) return;
+            editor.items.push({ id: product.id, name: product.name, category: product.category || '', price: product.price, unit: product.unit || 'unité', qty: 1 });
+            renderMyOrderEditor();
+            const body = document.getElementById('myOrderBody');
+            body.scrollTop = body.scrollHeight;
+        }
+
+        async function saveMyOrderEdit() {
+            const editor = myOrderEditor;
+            if (!editor) return;
+            const changed = editor.items.length !== editor.original.length
+                || editor.items.some((item, index) => Number(item.qty) !== Number(editor.original[index].qty));
+            if (!changed) { closeMyOrderEditor(); return; }
+            const { subtotal, total } = myEditorTotals();
+            if (subtotal <= 0) {
+                showToast("Gardez au moins un produit. Pour annuler la commande, écrivez-nous sur WhatsApp.");
+                return;
+            }
+            const button = document.getElementById('myOrderSave');
+            button.disabled = true;
+            const whatsappWindow = window.open('about:blank', '_blank');
+            if (whatsappWindow) whatsappWindow.opener = null;
+            const formatFcfa = value => `${Math.round(value).toLocaleString('fr-FR')} FCFA`;
+            const cleanItems = editor.items.map(item => ({ id: item.id, name: item.name, category: item.category || '', price: item.price, unit: item.unit || 'unité', qty: Number(item.qty) }));
+            try {
+                if (!cloudDb) throw new Error('cloud-unavailable');
+                if (!firebase.auth().currentUser) await firebase.auth().signInAnonymously();
+                await cloudDb.collection('orders').doc(editor.id).update({
+                    items: cleanItems,
+                    subtotal, total,
+                    clientEditedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (error) {
+                if (whatsappWindow) whatsappWindow.close();
+                button.disabled = false;
+                if (error.code === 'permission-denied') {
+                    closeMyOrderForEditing(editor.id);
+                    closeMyOrderEditor();
+                    showToast("La ferme a déjà préparé votre commande, elle ne peut plus être modifiée ici. Écrivez-nous sur WhatsApp.");
+                } else {
+                    showToast("Modification non enregistrée. Vérifiez la connexion puis réessayez.");
+                }
+                return;
+            }
+
+            writeMyOrders(readMyOrders().map(order => order.id === editor.id ? { ...order, items: cleanItems } : order));
+            const lines = cleanItems.map((item, index) => {
+                const isNew = index >= editor.original.length;
+                const label = `${formatOrderItemQuantity(item)} ${item.name} (${formatFcfa(Math.round(item.price * item.qty))})`;
+                if (item.qty <= 0) return `- ✖ ${item.name} (retiré)`;
+                if (isNew) return `- ➕ ${label} — AJOUTÉ`;
+                return Number(editor.original[index].qty) !== item.qty ? `- ✏️ ${label} — modifié` : `- ${label}`;
+            });
+            const message = [`✏️ *MODIFICATION DE COMMANDE — OUMY'S FARM*`, `🧾 *Réf :* ${editor.id}`, '', '🛒 *COMMANDE MISE À JOUR :*', ...lines, '', `✅ *NOUVEAU TOTAL :* ${formatFcfa(total)}`].join('\n');
+            const url = `https://wa.me/${oumyPhone}?text=${encodeURIComponent(message)}`;
+            if (whatsappWindow) whatsappWindow.location.href = url;
+            button.disabled = false;
+            closeMyOrderEditor();
+            renderMyOrderBar();
+            showToast("Commande modifiée. Envoyez le message WhatsApp pour prévenir la ferme.");
         }
 
         // --- ACCUEIL : ALBUM DE LA FERME ---
@@ -2942,6 +3228,30 @@
                 showToast("Commande annulée.");
             } catch (error) {
                 showToast("Impossible d'annuler la commande (règles à déployer ?).");
+            }
+        }
+
+        // Verrouiller = le client ne peut plus changer ses quantités (en préparation, par exemple).
+        // Verrouille plusieurs commandes d'un coup (tournée envoyée au livreur, commandes livrées).
+        async function lockOrders(orderIds) {
+            if (!orderIds.length || !cloudDb || !isFirebaseAdminUser()) return false;
+            try {
+                const batch = cloudDb.batch();
+                orderIds.forEach(id => batch.update(cloudDb.collection('orders').doc(id), { locked: true }));
+                await batch.commit();
+                return true;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        async function setOrderLock(orderId, locked) {
+            if (!requireFirebaseAdmin()) return;
+            try {
+                await cloudDb.collection('orders').doc(orderId).update({ locked: locked ? true : firebase.firestore.FieldValue.delete() });
+                showToast(locked ? "Commande verrouillée : le client ne peut plus la modifier." : "Commande déverrouillée.");
+            } catch (error) {
+                showToast("Impossible de changer le verrou (règles à déployer ?).");
             }
         }
 
@@ -3523,6 +3833,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
         }
 
         function sendDeliveriesToWhatsApp() {
+            lockOrders(selectedTourOrders().map(order => order.id));
             const message = buildDeliveriesMessage(selectedTourOrders());
             if (!message) {
                 showToast("Cochez au moins une commande pour la tournée.");
@@ -3539,6 +3850,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
         }
 
         async function copyDeliveriesMessage(successMessage = "Message copié. Collez-le dans WhatsApp.") {
+            lockOrders(selectedTourOrders().map(order => order.id));
             const message = buildDeliveriesMessage(selectedTourOrders());
             if (!message) {
                 showToast("Cochez au moins une commande pour la tournée.");
@@ -3589,6 +3901,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
         }
 
         async function markOrdersDelivered(orderIds) {
+            lockOrders(orderIds);
             orderIds.forEach(id => tourSelection.delete(id));
             await saveDeliveredStatus(orderIds, true);
             renderAdminDeliveries();
@@ -3706,6 +4019,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                     </div>
                     <div class="bg-white rounded-xl border border-emerald-100 px-3 py-1.5">
                         <p class="text-[10px] font-black uppercase tracking-wider text-slate-500 pb-1">À préparer pour cette tournée</p>
+                        <p class="text-[10px] text-slate-500 pb-1">Envoyer la tournée au livreur ou la copier <b>verrouille</b> ces commandes : les clients ne peuvent plus les modifier.</p>
                         ${prepRows}
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -4074,7 +4388,9 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                         </div>
                         <div class="flex flex-wrap gap-1">
                             ${ord.status === 'cancelled' ? '<span class="bg-rose-100 text-rose-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Annulée</span>' : ''}
-                            ${ord.updatedAt ?'<span class="bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Modifiée</span>' : ''}
+                            ${ord.updatedAt ? '<span class="bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Modifiée</span>' : ''}
+                            ${ord.clientEditedAt ? '<span class="bg-sky-100 text-sky-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Modifiée par le client</span>' : ''}
+                            ${ord.locked ? '<span class="bg-slate-200 text-slate-700 text-[9px] font-black uppercase px-1.5 py-0.5 rounded"><i class="fa-solid fa-lock"></i> Verrouillée</span>' : ''}
                             ${ord.invoiceNumber ? `<span class="bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Facture ${escapeDeliveryHtml(ord.invoiceNumber)}</span>` : ''}
                         </div>
                         <p class="text-slate-500 text-[10px]">Date et heure : ${escapeDeliveryHtml(ord.date || 'Non renseignées')}</p>
@@ -4088,6 +4404,9 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                             <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="restoreOrder(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-emerald-300 bg-white text-[10px] font-bold text-emerald-700 hover:bg-emerald-50"><i class="fa-solid fa-rotate-left"></i> Rétablir</button>` : `
                             <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="openInvoice(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-file-invoice"></i> Facture</button>
                             <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="sendInvoiceWhatsApp(this.dataset.id)" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700"><i class="fa-brands fa-whatsapp"></i> Envoyer au client</button>
+                            ${ord.locked
+                                ? `<button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="setOrderLock(this.dataset.id, false)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-lock-open"></i> Déverrouiller</button>`
+                                : (ord.invoiceNumber || ord.updatedAt ? '' : `<button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="setOrderLock(this.dataset.id, true)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-lock"></i> Verrouiller</button>`)}
                             <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="cancelOrder(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-rose-200 bg-white text-[10px] font-bold text-rose-600 hover:bg-rose-50"><i class="fa-solid fa-ban"></i> Annuler</button>`}
                         </div>
                     </div>

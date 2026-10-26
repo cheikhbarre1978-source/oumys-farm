@@ -94,12 +94,74 @@ service cloud.firestore {
       && data.updatedAt is timestamp;
   }
 
+  // --- Modification de sa commande par le client ---
+  // Possible tant que la ferme n'a rien touché (pas de verrou, de facture, de modification ni d'annulation),
+  // dans la limite de 7 jours. Une ligne existante ne change que par sa quantité ; une ligne ajoutée doit
+  // porter le prix et le nom du catalogue ; adresse, frais et lignes d'origine restent ceux de la commande.
+  function newLineOk(line) {
+    return line is map
+      && line.keys().hasOnly(['id', 'name', 'category', 'price', 'unit', 'qty'])
+      && line.keys().hasAll(['id', 'name', 'category', 'price', 'unit', 'qty'])
+      && line.id is string
+      && line.name is string
+      && line.qty is number
+      && line.qty > 0
+      && line.qty <= 100
+      && get(/databases/(default)/documents/catalogProducts/$(line.id)).data.price == line.price
+      && get(/databases/(default)/documents/catalogProducts/$(line.id)).data.name == line.name;
+  }
+
+  function clientLineOk(items, oldItems, i) {
+    return items.size() <= i
+      || (i < oldItems.size()
+          ? (items[i].diff(oldItems[i]).affectedKeys().hasOnly(['qty'])
+             && items[i].qty is number
+             && items[i].qty >= 0
+             && items[i].qty <= 100)
+          : newLineOk(items[i]));
+  }
+
+  function lineAmount(items, i) {
+    return items.size() > i ? math.round(items[i].price * items[i].qty) : 0;
+  }
+
+  function validClientEdit(orderId) {
+    let data = request.resource.data;
+    let old = resource.data;
+    let items = data.items;
+    let oldItems = old.items;
+    return request.auth != null
+      && data.keys().hasOnly(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total', 'clientEditedAt'])
+      && data.keys().hasAll(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total', 'clientEditedAt'])
+      && !('status' in old)
+      && !('invoiceNumber' in old)
+      && !('updatedAt' in old)
+      && !('locked' in old)
+      && request.time < old.createdAt + duration.value(7, 'd')
+      && data.id == orderId
+      && data.id == old.id
+      && data.date == old.date
+      && data.createdAt == old.createdAt
+      && data.customer == old.customer
+      && data.fee == old.fee
+      && data.clientEditedAt == request.time
+      && items is list
+      && oldItems is list
+      && items.size() >= oldItems.size()
+      && items.size() <= oldItems.size() + 8
+      && items.size() <= 20
+      && clientLineOk(items, oldItems, 0) && clientLineOk(items, oldItems, 1) && clientLineOk(items, oldItems, 2) && clientLineOk(items, oldItems, 3) && clientLineOk(items, oldItems, 4) && clientLineOk(items, oldItems, 5) && clientLineOk(items, oldItems, 6) && clientLineOk(items, oldItems, 7) && clientLineOk(items, oldItems, 8) && clientLineOk(items, oldItems, 9) && clientLineOk(items, oldItems, 10) && clientLineOk(items, oldItems, 11) && clientLineOk(items, oldItems, 12) && clientLineOk(items, oldItems, 13) && clientLineOk(items, oldItems, 14) && clientLineOk(items, oldItems, 15) && clientLineOk(items, oldItems, 16) && clientLineOk(items, oldItems, 17) && clientLineOk(items, oldItems, 18) && clientLineOk(items, oldItems, 19)
+      && data.subtotal == lineAmount(items, 0) + lineAmount(items, 1) + lineAmount(items, 2) + lineAmount(items, 3) + lineAmount(items, 4) + lineAmount(items, 5) + lineAmount(items, 6) + lineAmount(items, 7) + lineAmount(items, 8) + lineAmount(items, 9) + lineAmount(items, 10) + lineAmount(items, 11) + lineAmount(items, 12) + lineAmount(items, 13) + lineAmount(items, 14) + lineAmount(items, 15) + lineAmount(items, 16) + lineAmount(items, 17) + lineAmount(items, 18) + lineAmount(items, 19)
+      && data.subtotal > 0
+      && data.total == data.subtotal + data.fee;
+  }
+
   // Modification par l'admin : mêmes contrôles qu'à la création, avec les champs de suivi en plus.
   // L'identifiant, la date de création et un numéro de facture déjà attribué ne changent jamais.
   function validOrderUpdate(orderId) {
     let data = request.resource.data;
     let customer = data.customer;
-    return data.keys().hasOnly(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total', 'updatedAt', 'status', 'invoiceNumber', 'invoicedAt'])
+    return data.keys().hasOnly(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total', 'updatedAt', 'status', 'invoiceNumber', 'invoicedAt', 'clientEditedAt', 'locked'])
       && data.keys().hasAll(['id', 'date', 'createdAt', 'customer', 'items', 'subtotal', 'fee', 'total'])
       && data.id == orderId
       && data.id == resource.data.id
@@ -131,6 +193,8 @@ service cloud.firestore {
       && (!('status' in data) || data.status == 'cancelled')
       && (!('updatedAt' in data) || data.updatedAt is timestamp)
       && (!('invoicedAt' in data) || data.invoicedAt is timestamp)
+      && (!('clientEditedAt' in data) || data.clientEditedAt is timestamp)
+      && (!('locked' in data) || data.locked == true)
       && (!('invoiceNumber' in data) || (data.invoiceNumber is string && data.invoiceNumber.matches('^FAC-[0-9]{4}-[0-9]{4,}$')))
       && (!('invoiceNumber' in resource.data) || data.invoiceNumber == resource.data.invoiceNumber);
   }
@@ -200,7 +264,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow create: if request.auth != null && validOrder(orderId);
       allow read: if isAdmin();
-      allow update: if isAdmin() && validOrderUpdate(orderId);
+      allow update: if (isAdmin() && validOrderUpdate(orderId)) || validClientEdit(orderId);
       allow delete: if isAdmin();
     }
 
