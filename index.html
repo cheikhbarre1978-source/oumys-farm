@@ -466,6 +466,12 @@
                             </button>
                         </div>
                     </div>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" aria-hidden="true"></i>
+                        <input type="search" id="ordersSearch" oninput="renderAdminOrders()" placeholder="Rechercher un client, un téléphone, une adresse, un produit, un n° de commande ou de facture" aria-label="Rechercher dans les commandes" class="w-full text-xs pl-9 pr-9 py-2 rounded-xl border border-slate-300 bg-white focus:border-oumy-green focus:ring-2 focus:ring-oumy-green/20 outline-none">
+                        <button type="button" id="ordersSearchClear" onclick="clearOrdersSearch()" aria-label="Effacer la recherche" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full text-slate-500 hover:bg-slate-100"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <p id="ordersSearchInfo" class="hidden text-[11px] font-bold text-slate-500"></p>
                     <div id="adminOrdersList" class="space-y-2 text-xs">
                         <!-- Dynamic orders -->
                     </div>
@@ -3774,17 +3780,57 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
         }
 
         // --- RENDER ADMIN ORDERS & CSV EXPORT ---
+        // Recherche sans tenir compte des majuscules ni des accents.
+        function searchKey(value) {
+            return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        }
+
+        function orderMatchesSearch(order, terms) {
+            const items = Array.isArray(order.items) ? order.items : [];
+            const text = searchKey([
+                order.id, order.invoiceNumber, order.customer?.name, order.customer?.phone, order.customer?.address,
+                order.customer?.zone, order.date, order.status === 'cancelled' ? 'annulee annulée' : '',
+                ...items.map(item => item.name)
+            ].join(' '));
+            // Un numéro tapé sans espaces doit retrouver « 77 123 45 67 » : on compare alors aux chiffres du téléphone seulement.
+            const phoneDigits = String(order.customer?.phone || '').replace(/\D/g, '');
+            return terms.every(term => text.includes(term) || (/^\d{3,}$/.test(term) && phoneDigits.includes(term)));
+        }
+
+        function clearOrdersSearch() {
+            const input = document.getElementById('ordersSearch');
+            if (input) input.value = '';
+            renderAdminOrders();
+            input?.focus();
+        }
+
         function renderAdminOrders() {
             const container = document.getElementById('adminOrdersList');
             if (!container) return;
 
+            const searchInput = document.getElementById('ordersSearch');
+            const searchInfo = document.getElementById('ordersSearchInfo');
+            const terms = searchKey(searchInput?.value || '').split(/\s+/).filter(Boolean);
+            document.getElementById('ordersSearchClear')?.classList.toggle('hidden', !terms.length);
+
             if (ordersHistory.length === 0) {
+                if (searchInfo) searchInfo.classList.add('hidden');
                 container.innerHTML = `<p class="text-center text-slate-400 py-6">Aucune commande enregistrée.</p>`;
                 return;
             }
 
+            const matching = terms.length ? ordersHistory.filter(order => orderMatchesSearch(order, terms)) : ordersHistory;
+            if (searchInfo) {
+                searchInfo.classList.toggle('hidden', !terms.length);
+                searchInfo.textContent = `${matching.length} commande${matching.length > 1 ? 's' : ''} trouvée${matching.length > 1 ? 's' : ''} sur ${ordersHistory.length}`;
+            }
+            if (!matching.length) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-6">Aucune commande ne correspond à « ${escapeDeliveryHtml(searchInput.value.trim())} ».</p>`;
+                return;
+            }
+
             const sortOrder = document.getElementById('ordersSortOrder')?.value || 'newest';
-            const sortedOrders = [...ordersHistory].sort((firstOrder, secondOrder) => {
+            const sortedOrders = [...matching].sort((firstOrder, secondOrder) => {
                 const difference = (getOrderTimestamp(firstOrder) ?? 0) - (getOrderTimestamp(secondOrder) ?? 0);
                 return sortOrder === 'oldest' ? difference : -difference;
             });
