@@ -1375,7 +1375,8 @@
 
         // --- CART LOGIC ---
         function isHalfKiloVegetable(item) {
-            return item.category === 'legumes' && item.unit?.trim().toLowerCase() === 'kg';
+            // Produits vendus au kilo : légumes et rayon « Pack vert ». Les bottes, litres, tablettes et packs composés n'ont pas de poids.
+            return (item.category === 'legumes' || item.category === 'packs') && item.unit?.trim().toLowerCase() === 'kg';
         }
 
         // Produits vendables au détail dès 125 g (quantités exprimées en kg dans le panier)
@@ -1390,7 +1391,7 @@
             { qty: 1, label: '1 kg' }
         ];
         function isPortionProduct(item) {
-            return PORTION_PRODUCT_IDS.has(item.id) && isHalfKiloVegetable(item);
+            return isHalfKiloVegetable(item) && (PORTION_PRODUCT_IDS.has(item.id) || item.category === 'packs');
         }
 
         function setCartPortion(productId, qty) {
@@ -1417,7 +1418,7 @@
 
         function formatKgQuantity(item) {
             const qty = Number(item.qty) || 0;
-            if (PORTION_PRODUCT_IDS.has(item.id) && qty < 1) return `${Math.round(qty * 1000)} g`;
+            if (isPortionProduct(item) && qty < 1) return `${Math.round(qty * 1000)} g`;
             return `${formatQuantity(qty)} kg`;
         }
 
