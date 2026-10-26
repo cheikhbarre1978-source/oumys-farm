@@ -113,7 +113,8 @@
                         <li class="inline-flex items-center gap-1 bg-white/10 border border-white/20 rounded-lg px-2 py-1"><i class="fa-solid fa-truck-fast text-amber-300"></i> Livraison Dakar &amp; banlieue</li>
                         <li class="inline-flex items-center gap-1 bg-white/10 border border-white/20 rounded-lg px-2 py-1"><i class="fa-solid fa-leaf text-amber-300"></i> Légumes frais du jardin</li>
                     </ul>
-                    <button type="button" onclick="document.getElementById('searchInput').scrollIntoView({ behavior: 'smooth', block: 'center' })" class="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black active:scale-95 transition-transform">
+                    <div id="heroAnnouncement" class="hidden mt-1 rounded-2xl border-2 px-3.5 py-3 space-y-1" role="status" aria-live="polite"></div>
+                    <button type="button" id="heroMarketButton" onclick="document.getElementById('searchInput').scrollIntoView({ behavior: 'smooth', block: 'center' })" class="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black active:scale-95 transition-transform">
                         <i class="fa-solid fa-basket-shopping"></i> Voir le marché
                     </button>
                 </div>
@@ -552,6 +553,34 @@
 
                 <!-- Tab Content: Settings -->
                 <div id="adminTabSettings" class="admin-content flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar hidden text-xs">
+                    <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
+                        <div>
+                            <h5 class="font-bold text-slate-900">Message aux clients (page d'accueil) :</h5>
+                            <p class="text-[10px] text-slate-500">S'affiche dans la bannière du site, à la place du bouton « Voir le marché ». Idéal pour annoncer une livraison décalée, une fermeture ou une nouveauté.</p>
+                        </div>
+                        <label class="space-y-0.5 block"><span class="block text-[10px] font-bold text-slate-500">Titre (facultatif)</span>
+                            <input type="text" id="announcementTitle" maxlength="60" oninput="previewAnnouncement()" placeholder="Ex : Livraison de jeudi" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none focus:border-oumy-green"></label>
+                        <label class="space-y-0.5 block"><span class="block text-[10px] font-bold text-slate-500">Message</span>
+                            <textarea id="announcementText" rows="3" maxlength="500" oninput="previewAnnouncement()" placeholder="Ex : Pas de livraison dimanche. Les commandes passées avant samedi 18 h partent lundi." class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none focus:border-oumy-green resize-y"></textarea></label>
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <label class="flex items-center gap-2 text-[11px] font-bold text-slate-700">Style :
+                                <select id="announcementTone" onchange="previewAnnouncement()" class="px-2 py-1 border border-slate-300 rounded-lg bg-white">
+                                    <option value="info">Information</option>
+                                    <option value="important">Important</option>
+                                </select></label>
+                            <span id="announcementCount" class="text-[10px] text-slate-400">0 / 500</span>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-500 mb-1">Aperçu</p>
+                            <div class="bg-gradient-to-r from-teal-900 via-oumy-green to-teal-800 rounded-xl p-3"><div id="announcementPreview" class="rounded-2xl border-2 px-3.5 py-3 space-y-1"></div></div>
+                        </div>
+                        <div class="flex gap-2 flex-wrap">
+                            <button type="button" onclick="saveAnnouncement(true)" class="px-3 py-1.5 bg-oumy-green text-white font-bold rounded-xl">Publier le message</button>
+                            <button type="button" onclick="saveAnnouncement(false)" class="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-100">Retirer le message</button>
+                        </div>
+                        <p id="announcementStatus" class="text-[10px] text-slate-500"></p>
+                    </div>
+
                     <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
                         <h5 class="font-bold text-slate-900">Numéro WhatsApp Réceptionnaire :</h5>
                         <input type="text" id="settingPhone" placeholder="221770000000" class="w-full px-3 py-2 border border-slate-300 rounded-xl outline-none font-mono">
@@ -1214,6 +1243,12 @@
                         const phoneInput = document.getElementById('settingPhone');
                         if (phoneInput && document.activeElement !== phoneInput) phoneInput.value = phone;
                     }, () => showToast("Impossible de charger le numéro WhatsApp."));
+
+                    cloudDb.collection('siteSettings').doc('announcement').onSnapshot(snapshot => {
+                        announcement = snapshot.exists ? snapshot.data() : null;
+                        renderAnnouncement();
+                        fillAnnouncementForm();
+                    }, () => { /* message indisponible : le bouton « Voir le marché » reste affiché */ });
 
                     cloudDb.collection('farmAlbum').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
                         farmAlbum = snapshot.docs.map(document => ({ ...document.data(), id: document.id }));
@@ -1920,6 +1955,7 @@
                 loadAdminOrdersFromCloud();
             } else if (tab === 'settings') {
                 document.getElementById('adminTabSettings').classList.remove('hidden');
+                fillAnnouncementForm();
                 document.getElementById('settingPhone').value = oumyPhone;
                 renderDeliveryZonesAdmin();
             }
@@ -2382,6 +2418,87 @@
                     </div>
                     <span class="text-[10px] font-bold text-teal-50">${summary}</span>
                 </div>`;
+        }
+
+        // --- MESSAGE AUX CLIENTS ---
+        let announcement = null;
+
+        function announcementStyle(tone) {
+            return tone === 'important'
+                ? { box: 'bg-amber-50 border-amber-400 text-amber-950', icon: 'fa-triangle-exclamation text-amber-600', title: 'text-amber-950' }
+                : { box: 'bg-white/95 border-white text-slate-800', icon: 'fa-bullhorn text-oumy-green', title: 'text-slate-900' };
+        }
+
+        function announcementHtml(title, text, tone) {
+            const style = announcementStyle(tone);
+            return {
+                className: `rounded-2xl border-2 px-3.5 py-3 space-y-1 ${style.box}`,
+                html: `<p class="flex items-center gap-2 text-xs font-black ${style.title}"><i class="fa-solid ${style.icon}" aria-hidden="true"></i>${escapeDeliveryHtml(title || 'Message de la ferme')}</p>
+                       <p class="text-xs leading-relaxed">${escapeDeliveryHtml(text).replace(/\n/g, '<br>')}</p>`
+            };
+        }
+
+        function renderAnnouncement() {
+            const box = document.getElementById('heroAnnouncement');
+            const button = document.getElementById('heroMarketButton');
+            if (!box || !button) return;
+            const active = announcement && announcement.active === true && String(announcement.text || '').trim();
+            box.classList.toggle('hidden', !active);
+            button.classList.toggle('hidden', Boolean(active));
+            if (!active) return;
+            const view = announcementHtml(String(announcement.title || '').trim(), String(announcement.text).trim(), announcement.tone);
+            box.className = `mt-1 ${view.className}`;
+            box.innerHTML = view.html;
+        }
+
+        function previewAnnouncement() {
+            const title = document.getElementById('announcementTitle')?.value.trim() || '';
+            const text = document.getElementById('announcementText')?.value.trim() || '';
+            const tone = document.getElementById('announcementTone')?.value || 'info';
+            const preview = document.getElementById('announcementPreview');
+            const count = document.getElementById('announcementCount');
+            if (count) count.textContent = `${document.getElementById('announcementText').value.length} / 500`;
+            if (!preview) return;
+            const view = announcementHtml(title, text || 'Votre message apparaîtra ici.', tone);
+            preview.className = view.className;
+            preview.innerHTML = view.html;
+        }
+
+        function fillAnnouncementForm() {
+            const titleInput = document.getElementById('announcementTitle');
+            const textInput = document.getElementById('announcementText');
+            if (!titleInput || !textInput) return;
+            // On ne réécrit pas ce que l'administrateur est en train de taper.
+            if (document.activeElement !== titleInput && document.activeElement !== textInput) {
+                titleInput.value = announcement?.title || '';
+                textInput.value = announcement?.text || '';
+                document.getElementById('announcementTone').value = announcement?.tone === 'important' ? 'important' : 'info';
+            }
+            const status = document.getElementById('announcementStatus');
+            if (status) status.textContent = announcement?.active === true ? '✅ Un message est actuellement affiché aux clients.' : 'Aucun message affiché : les clients voient le bouton « Voir le marché ».';
+            previewAnnouncement();
+        }
+
+        async function saveAnnouncement(publish) {
+            if (!requireFirebaseAdmin()) return;
+            const title = document.getElementById('announcementTitle').value.trim().slice(0, 60);
+            const text = document.getElementById('announcementText').value.trim().slice(0, 500);
+            const tone = document.getElementById('announcementTone').value === 'important' ? 'important' : 'info';
+            if (publish && !text) {
+                showToast("Écrivez le message à afficher.");
+                return;
+            }
+            try {
+                await cloudDb.collection('siteSettings').doc('announcement').set({
+                    title, text: publish ? text : (announcement?.text || text), active: publish, tone,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast(publish ? "Message publié sur la page d'accueil." : "Message retiré.");
+            } catch (error) {
+                showToast(error.code === 'permission-denied'
+                    ? "Refusé : déployez les nouvelles règles et connectez-vous en admin."
+                    : "Impossible d'enregistrer le message.");
+            }
         }
 
         // --- ACCUEIL : ALBUM DE LA FERME ---

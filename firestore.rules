@@ -72,6 +72,19 @@ service cloud.firestore {
       && data.deliveredAt is timestamp;
   }
 
+  function validAnnouncement() {
+    let data = request.resource.data;
+    return data.keys().hasOnly(['title', 'text', 'active', 'tone', 'updatedAt'])
+      && data.keys().hasAll(['title', 'text', 'active', 'tone', 'updatedAt'])
+      && data.title is string
+      && data.title.size() <= 60
+      && data.text is string
+      && data.text.size() <= 500
+      && data.active is bool
+      && (data.tone == 'info' || data.tone == 'important')
+      && data.updatedAt is timestamp;
+  }
+
   function validWhatsAppSettings() {
     let data = request.resource.data;
     return data.keys().hasOnly(['phone', 'updatedAt'])
@@ -163,10 +176,11 @@ service cloud.firestore {
     }
 
     match /siteSettings/{settingId} {
-      allow read: if settingId == 'delivery' || settingId == 'whatsapp';
+      allow read: if settingId == 'delivery' || settingId == 'whatsapp' || settingId == 'announcement';
       allow create, update: if isAdmin()
         && ((settingId == 'delivery' && validDeliverySettings())
-          || (settingId == 'whatsapp' && validWhatsAppSettings()));
+          || (settingId == 'whatsapp' && validWhatsAppSettings())
+          || (settingId == 'announcement' && validAnnouncement()));
       allow delete: if false;
     }
 
