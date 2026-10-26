@@ -3640,10 +3640,40 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
         }
 
         let selectedPreparationDay = null;
+        let preparationWeekStart = null;
+
+        function prepDayKey(date) {
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function prepParseDayKey(key) {
+            const [year, month, day] = key.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        }
+
+        function prepMondayOf(date) {
+            const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+            return monday;
+        }
 
         function selectPreparationDay(dayKey) {
             selectedPreparationDay = dayKey;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) preparationWeekStart = prepMondayOf(prepParseDayKey(dayKey));
             renderDailyPreparation();
+        }
+
+        function shiftPreparationWeek(delta) {
+            if (!preparationWeekStart) return;
+            const next = new Date(preparationWeekStart);
+            next.setDate(next.getDate() + delta * 7);
+            preparationWeekStart = next;
+            selectedPreparationDay = null; // le rendu choisit alors le jour utile de la nouvelle semaine
+            renderDailyPreparation();
+        }
+
+        function goPreparationToday() {
+            selectPreparationDay(prepDayKey(new Date()));
         }
 
         function renderDailyPreparation() {
@@ -3691,17 +3721,79 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 });
             });
 
-            if (!groups.has(selectedPreparationDay)) selectedPreparationDay = groups.keys().next().value;
+            // --- Semaine affichée ---
+            const todayKey = prepDayKey(new Date());
+            const datedKeys = [...groups.keys()].filter(key => key !== 'unknown-date').sort();
+            if (!preparationWeekStart) {
+                const start = selectedPreparationDay && /^\d{4}/.test(selectedPreparationDay) ? prepParseDayKey(selectedPreparationDay)
+                    : groups.has(todayKey) || !datedKeys.length ? new Date() : prepParseDayKey(datedKeys[datedKeys.length - 1]);
+                preparationWeekStart = prepMondayOf(start);
+            }
+            const weekDays = Array.from({ length: 7 }, (_, index) => {
+                const date = new Date(preparationWeekStart);
+                date.setDate(date.getDate() + index);
+                return { date, key: prepDayKey(date) };
+            });
+            if (!selectedPreparationDay || (!groups.has(selectedPreparationDay) && !weekDays.some(day => day.key === selectedPreparationDay))) {
+                const withOrders = weekDays.filter(day => groups.has(day.key));
+                selectedPreparationDay = weekDays.some(day => day.key === todayKey) && groups.has(todayKey) ? todayKey
+                    : withOrders.length ? withOrders[withOrders.length - 1].key : null;
+            }
             const group = groups.get(selectedPreparationDay);
 
-            const dayChips = [...groups.values()].map(day => {
-                const active = day.dayKey === selectedPreparationDay;
-                const badge = relativeDayLabel(day.dayKey);
-                return `<button type="button" onclick="selectPreparationDay('${day.dayKey}')" aria-pressed="${active}" class="shrink-0 px-3 py-1.5 rounded-xl border-2 text-[11px] font-bold text-left leading-tight transition-colors ${active ? 'bg-oumy-green border-oumy-green text-white shadow-md' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">
-                    <span class="block capitalize">${badge || day.shortLabel}</span>
-                    <span class="block text-[9px] font-semibold ${active ? 'text-teal-100' : 'text-slate-500'}">${day.orders.length} commande${day.orders.length > 1 ? 's' : ''}</span>
+            const currentMonday = prepMondayOf(new Date());
+            const canGoNext = preparationWeekStart < currentMonday;
+            const canGoPrev = datedKeys.length > 0 && preparationWeekStart > prepMondayOf(prepParseDayKey(datedKeys[0]));
+            const weekEnd = weekDays[6].date;
+            const frDay = date => (date.getDate() === 1 ? '1er' : String(date.getDate()));
+            const frMonth = date => date.toLocaleDateString('fr-FR', { month: 'long' });
+            const weekLabel = preparationWeekStart.getMonth() === weekEnd.getMonth()
+                ? `${frDay(preparationWeekStart)} au ${frDay(weekEnd)} ${frMonth(weekEnd)} ${weekEnd.getFullYear()}`
+                : `${frDay(preparationWeekStart)} ${frMonth(preparationWeekStart)} au ${frDay(weekEnd)} ${frMonth(weekEnd)} ${weekEnd.getFullYear()}`;
+            const weekOrderCount = weekDays.reduce((sum, day) => sum + (groups.get(day.key)?.orders.length || 0), 0);
+            const isDayFullyPrepared = day => {
+                const dayGroup = groups.get(day.key);
+                if (!dayGroup || !dayGroup.products.size) return false;
+                return [...dayGroup.products.values()].every(product => isPrepDone(`${day.key}|p|${product.key}`));
+            };
+
+            const arrowClass = enabled => `w-9 h-9 rounded-xl border-2 text-slate-700 font-black flex items-center justify-center ${enabled ? 'border-slate-300 bg-white hover:bg-slate-100' : 'border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'}`;
+            const dayChips = weekDays.map(day => {
+                const dayGroup = groups.get(day.key);
+                const count = dayGroup ? dayGroup.orders.length : 0;
+                const active = day.key === selectedPreparationDay;
+                const isToday = day.key === todayKey;
+                const finished = isDayFullyPrepared(day);
+                const weekday = day.date.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
+                const palette = active ? 'bg-oumy-green border-oumy-green text-white shadow-md'
+                    : count ? 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
+                    : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed';
+                return `<button type="button" ${count ? '' : 'disabled'} onclick="selectPreparationDay('${day.key}')" aria-pressed="${active}" aria-label="${day.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}${count ? `, ${count} commande${count > 1 ? 's' : ''}` : ', aucune commande'}" class="relative rounded-xl border-2 px-1 py-2 text-center leading-tight transition-colors ${palette} ${isToday && !active ? 'ring-2 ring-amber-400' : ''}">
+                    <span class="block text-[10px] font-bold capitalize">${weekday}</span>
+                    <span class="block text-base font-black">${day.date.getDate()}</span>
+                    <span class="block text-[9px] font-semibold ${active ? 'text-teal-100' : count ? 'text-slate-500' : 'text-slate-300'}">${count ? `${count} cmd` : '—'}</span>
+                    ${finished ? '<span class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center shadow" title="Tout est préparé">✓</span>' : ''}
                 </button>`;
-            }).join('');
+            }).join('') + (groups.has('unknown-date') ? `<button type="button" onclick="selectPreparationDay('unknown-date')" class="col-span-7 rounded-xl border-2 border-slate-300 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100">Commandes sans date (${groups.get('unknown-date').orders.length})</button>` : '');
+
+            const weekNavHtml = `
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" ${canGoPrev ? '' : 'disabled'} onclick="shiftPreparationWeek(-1)" aria-label="Semaine précédente" class="${arrowClass(canGoPrev)}"><i class="fa-solid fa-chevron-left"></i></button>
+                        <div class="text-center px-1">
+                            <p class="text-xs font-black text-slate-800">Semaine du ${weekLabel}</p>
+                            <p class="text-[10px] font-semibold text-slate-500">${weekOrderCount} commande${weekOrderCount > 1 ? 's' : ''} cette semaine</p>
+                        </div>
+                        <button type="button" ${canGoNext ? '' : 'disabled'} onclick="shiftPreparationWeek(1)" aria-label="Semaine suivante" class="${arrowClass(canGoNext)}"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                    <button type="button" onclick="goPreparationToday()" class="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black active:scale-95 transition-transform">Aujourd'hui</button>
+                </div>
+                <div class="grid grid-cols-7 gap-1.5" role="group" aria-label="Choisir un jour de la semaine">${dayChips}</div>`;
+
+            if (!group) {
+                container.innerHTML = `${weekNavHtml}<p class="text-center text-slate-400 py-8">Aucune commande cette semaine. Utilisez les flèches pour voir une autre semaine.</p>`;
+                return;
+            }
 
             const products = [...group.products.values()];
             const productDone = product => isPrepDone(`${group.dayKey}|p|${product.key}`);
@@ -3757,7 +3849,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             const progress = (done, total) => `<span class="text-[10px] font-bold ${total && done === total ? 'text-emerald-700' : 'text-slate-500'}">${done}/${total} ${total && done === total ? '✓' : ''}</span>`;
 
             container.innerHTML = `
-                <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar" role="group" aria-label="Choisir une journée">${dayChips}</div>
+                ${weekNavHtml}
                 <section class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-2 space-y-2">
                     ${dayBannerHtml(group, `${group.orders.length} commande${group.orders.length > 1 ? 's' : ''}`)}
                     <div class="bg-white rounded-xl border border-slate-200 px-3 py-2">
