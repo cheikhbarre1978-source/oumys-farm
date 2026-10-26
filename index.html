@@ -99,7 +99,7 @@
         <section id="accueil" aria-labelledby="accueilTitle" class="space-y-3">
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-900 via-oumy-green to-teal-800 text-white p-4 sm:p-6 shadow-lg border border-teal-700/40">
                 <div class="relative z-10 grid md:grid-cols-2 gap-4 md:gap-6 items-center">
-                <div class="max-w-xl space-y-2.5">
+                <div class="max-w-xl flex flex-col items-start gap-2.5">
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider">
                         <i class="fa-solid fa-seedling"></i> Du champ à la marmite
                     </span>
@@ -113,7 +113,7 @@
                         <li class="inline-flex items-center gap-1 bg-white/10 border border-white/20 rounded-lg px-2 py-1"><i class="fa-solid fa-truck-fast text-amber-300"></i> Livraison Dakar &amp; banlieue</li>
                         <li class="inline-flex items-center gap-1 bg-white/10 border border-white/20 rounded-lg px-2 py-1"><i class="fa-solid fa-leaf text-amber-300"></i> Légumes frais du jardin</li>
                     </ul>
-                    <div id="heroAnnouncement" class="hidden mt-1 rounded-2xl border-2 px-3.5 py-3 space-y-1" role="status" aria-live="polite"></div>
+                    <div id="heroAnnouncement" class="hidden order-first md:order-none self-stretch rounded-2xl border-2 px-3.5 py-3 space-y-1" role="status" aria-live="polite"></div>
                     <button type="button" id="heroMarketButton" onclick="document.getElementById('searchInput').scrollIntoView({ behavior: 'smooth', block: 'center' })" class="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black active:scale-95 transition-transform">
                         <i class="fa-solid fa-basket-shopping"></i> Voir le marché
                     </button>
@@ -2434,8 +2434,8 @@
             const style = announcementStyle(tone);
             return {
                 className: `rounded-2xl border-2 px-3.5 py-3 space-y-1 ${style.box}`,
-                html: `<p class="flex items-center gap-2 text-xs font-black ${style.title}"><i class="fa-solid ${style.icon}" aria-hidden="true"></i>${escapeDeliveryHtml(title || 'Message de la ferme')}</p>
-                       <p class="text-xs leading-relaxed">${escapeDeliveryHtml(text).replace(/\n/g, '<br>')}</p>`
+                html: `<p class="flex items-center gap-2 text-sm font-black ${style.title}"><i class="fa-solid ${style.icon}" aria-hidden="true"></i>${escapeDeliveryHtml(title || 'Message de la ferme')}</p>
+                       <p class="text-sm leading-relaxed break-words">${escapeDeliveryHtml(text).replace(/\n/g, '<br>')}</p>`
             };
         }
 
@@ -2448,7 +2448,7 @@
             button.classList.toggle('hidden', Boolean(active));
             if (!active) return;
             const view = announcementHtml(String(announcement.title || '').trim(), String(announcement.text).trim(), announcement.tone);
-            box.className = `mt-1 ${view.className}`;
+            box.className = `order-first md:order-none self-stretch ${view.className}`;
             box.innerHTML = view.html;
         }
 
