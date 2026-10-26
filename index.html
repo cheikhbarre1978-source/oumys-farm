@@ -44,6 +44,12 @@
         .product-image-frame { aspect-ratio: 4 / 3; }
         .product-image { object-fit: contain; padding: 0.5rem; }
         .cart-line-total { white-space: nowrap; }
+        details.order-items > summary { list-style: none; cursor: pointer; }
+        details.order-items > summary::-webkit-details-marker { display: none; }
+        details.order-items .preview { display: none; }
+        details.order-items:not([open]) .preview { display: inline-block; }
+        details.order-items .chev { transition: transform 0.2s; }
+        details.order-items[open] .chev { transform: rotate(180deg); }
         .filter-btn { padding: 0.65rem 1.1rem !important; font-size: 0.9rem !important; font-weight: 800 !important; border: 2px solid #94a3b8 !important; background: #fff !important; color: #0f172a !important; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
         .filter-btn:hover { border-color: #0f766e !important; color: #0f766e !important; }
         .filter-btn[aria-pressed="true"] { background: #0f766e !important; border-color: #0f766e !important; color: #fff !important; box-shadow: 0 4px 10px rgba(15, 118, 110, 0.35); }
@@ -491,6 +497,8 @@
                                 <option value="newest">Plus récentes</option>
                                 <option value="oldest">Plus anciennes</option>
                             </select>
+                            <button type="button" onclick="foldOrderLists(true)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-angles-up"></i> Tout replier</button>
+                            <button type="button" onclick="foldOrderLists(false)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-angles-down"></i> Tout déplier</button>
                             <button type="button" onclick="exportOrdersToCSV()" class="px-2.5 py-1 bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1">
                                 <i class="fa-solid fa-file-excel"></i> Exporter en CSV
                             </button>
@@ -3052,19 +3060,44 @@
 
         // --- COMMANDES : MODIFIER, ANNULER, SUPPRIMER, FACTURER ---
         // Liste lisible des produits d'une commande : une ligne par produit, quantité en gras, prix à droite.
-        function orderItemsListHtml(items, withTitle = false) {
+        // Avec un identifiant de commande, le bloc se replie et se déplie d'un clic (état gardé d'un affichage à l'autre).
+        let foldedOrderLists = new Set();
+
+        function onOrderListToggle(element) {
+            if (element.open) foldedOrderLists.delete(element.dataset.id); else foldedOrderLists.add(element.dataset.id);
+        }
+
+        function foldOrderLists(fold) {
+            foldedOrderLists = fold ? new Set(ordersHistory.map(order => order.id)) : new Set();
+            renderAdminOrders();
+            renderAdminDeliveries();
+        }
+
+        function orderItemsListHtml(items, withTitle = false, orderId = '') {
             const lines = Array.isArray(items) ? items : [];
             if (!lines.length) return '';
             const formatFcfa = value => `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} FCFA`;
-            return `
-                <div class="rounded-xl border border-slate-200 bg-white overflow-hidden" role="list" aria-label="Produits commandés">
-                    ${withTitle ? `<p class="px-3 py-1 bg-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-600">Produits commandés (${lines.length})</p>` : ''}
-                    ${lines.map(item => `
-                    <div role="listitem" class="flex items-baseline justify-between gap-3 px-3 py-1.5 border-t border-slate-100 first:border-t-0">
+            const rows = lines.map(item => `
+                    <div role="listitem" class="flex items-baseline justify-between gap-3 px-3 py-1.5 border-t border-slate-100">
                         <span class="min-w-0 text-[13px] text-slate-800 break-words"><b class="inline-block min-w-[3.6rem] font-black text-slate-950">${escapeDeliveryHtml(formatOrderItemQuantity(item))}</b> ${escapeDeliveryHtml(item.name)}</span>
                         <span class="shrink-0 text-[12px] font-bold text-slate-500">${formatFcfa(Math.round((Number(item.price) || 0) * (Number(item.qty) || 0)))}</span>
-                    </div>`).join('')}
+                    </div>`).join('');
+            if (!orderId) {
+                return `
+                <div class="rounded-xl border border-slate-200 bg-white overflow-hidden" role="list" aria-label="Produits commandés">
+                    ${withTitle ? `<p class="px-3 py-1 bg-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-600">Produits commandés (${lines.length})</p>` : ''}${rows}
                 </div>`;
+            }
+            const preview = lines.slice(0, 2).map(item => escapeDeliveryHtml(item.name)).join(', ') + (lines.length > 2 ? ` +${lines.length - 2}` : '');
+            return `
+                <details class="order-items rounded-xl border border-slate-200 bg-white overflow-hidden" ${foldedOrderLists.has(orderId) ? '' : 'open'} data-id="${escapeDeliveryHtml(orderId)}" ontoggle="onOrderListToggle(this)">
+                    <summary class="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-100 select-none" aria-label="Afficher ou masquer les produits commandés">
+                        <span class="min-w-0 flex-1 text-[10px] font-black uppercase tracking-wider text-slate-600">Produits commandés (${lines.length})<span class="preview ml-1 max-w-full align-bottom truncate font-semibold normal-case tracking-normal text-slate-500 text-[11px]">· ${preview}</span></span>
+                        <i class="fa-solid fa-chevron-down chev shrink-0 text-[10px] text-slate-500" aria-hidden="true"></i>
+                    </summary>
+                    <div role="list" aria-label="Produits commandés">${rows}
+                    </div>
+                </details>`;
         }
 
         function activeOrders() {
@@ -3987,7 +4020,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                             <span class="font-extrabold text-oumy-green shrink-0">${formatFcfa(order.total)}</span>
                         </div>
                         <p class="text-[10px] text-slate-500">📍 ${escapeDeliveryHtml(order.customer?.address || '')} · 🚚 ${escapeDeliveryHtml(orderZoneName(order))} · 📞 ${escapeDeliveryHtml(order.customer?.phone || '')}</p>
-                        ${orderItemsListHtml(items)}
+                        ${orderItemsListHtml(items, true, order.id)}
                         <div class="flex items-center justify-between gap-2 pt-1">
                             ${isDone
                                 ? `<span class="text-[10px] font-bold text-emerald-700">✓ Livrée le ${new Date(readDelivered()[order.id] || 0).toLocaleDateString('fr-FR')}</span>
@@ -4024,6 +4057,8 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                     <div class="flex items-center gap-2">
                         <button type="button" onclick="selectTourOrders('all')" class="px-2.5 py-1 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-700 hover:bg-slate-100">Tout cocher${deliveriesZoneFilter === 'all' ? '' : ' (zone)'}</button>
                         <button type="button" onclick="selectTourOrders('none')" class="px-2.5 py-1 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-700 hover:bg-slate-100">Tout décocher</button>
+                        <button type="button" onclick="foldOrderLists(true)" class="px-2.5 py-1 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-angles-up"></i> Tout replier</button>
+                        <button type="button" onclick="foldOrderLists(false)" class="px-2.5 py-1 rounded-lg border border-slate-300 text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-angles-down"></i> Tout déplier</button>
                     </div>
                 </div>
                 <div class="flex gap-2 overflow-x-auto pb-1 custom-scrollbar" role="group" aria-label="Filtrer par zone">${zoneChips}</div>
@@ -4411,7 +4446,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                         </div>
                         <p class="text-slate-500 text-[10px]">Date et heure : ${escapeDeliveryHtml(ord.date || 'Non renseignées')}</p>
                         <p class="text-slate-500 text-[10px]">📍 ${escapeDeliveryHtml(ord.customer.address)} | 📞 ${escapeDeliveryHtml(ord.customer.phone)}</p>
-                        ${orderItemsListHtml(ord.items, true)}
+                        ${orderItemsListHtml(ord.items, true, ord.id)}
                         <div class="flex flex-wrap gap-1.5 pt-1">
                             <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="openOrderEditor(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-pen"></i> Modifier</button>
                             ${ord.status === 'cancelled' ? `
