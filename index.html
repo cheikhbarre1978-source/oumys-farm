@@ -324,6 +324,25 @@
         </div>
     </div>
 
+    <!-- Nouvelle commande saisie par la ferme (téléphone, WhatsApp, sur place) -->
+    <div id="newOrderModal" class="fixed inset-0 z-[75] hidden flex items-end sm:items-center justify-center bg-slate-950/70 p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="newOrderTitle">
+        <div class="bg-white rounded-t-2xl sm:rounded-2xl max-w-2xl w-full max-h-[96vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="flex items-center justify-between gap-2 px-4 py-3 bg-oumy-green text-white">
+                <h3 id="newOrderTitle" class="font-black text-sm">Nouvelle commande</h3>
+                <button type="button" onclick="closeNewOrderForm()" aria-label="Fermer" class="w-8 h-8 rounded-lg hover:bg-white/10"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="newOrderBody" class="flex-1 overflow-y-auto p-4 space-y-4 text-xs custom-scrollbar"></div>
+            <div class="px-4 py-3 border-t border-slate-200 bg-slate-50 space-y-2">
+                <div class="flex justify-between items-baseline"><span class="text-xs font-bold text-slate-600">Total (livraison comprise)</span><b id="noTotal" class="text-base text-oumy-green">0 FCFA</b></div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <button type="button" onclick="closeNewOrderForm()" class="py-2.5 rounded-xl border-2 border-slate-300 text-slate-700 text-xs font-black hover:bg-slate-100">Fermer</button>
+                    <button type="button" id="noSave" onclick="saveNewOrder(false)" class="py-2.5 rounded-xl bg-oumy-green hover:bg-teal-800 text-white text-xs font-black">Enregistrer</button>
+                    <button type="button" id="noSaveSend" onclick="saveNewOrder(true)" class="col-span-2 sm:col-span-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black"><i class="fa-brands fa-whatsapp"></i> Enregistrer et confirmer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modification d'une commande -->
     <div id="orderEditModal" class="fixed inset-0 z-[75] hidden flex items-center justify-center bg-slate-950/70 p-2 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="orderEditTitle">
         <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[94vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
@@ -490,7 +509,10 @@
                 <!-- Tab Content: Orders -->
                 <div id="adminTabOrders" class="admin-content flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 custom-scrollbar hidden">
                     <div class="flex items-center justify-between gap-2 flex-wrap">
-                        <h4 class="font-bold text-xs text-slate-800">Historique des Commandes</h4>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h4 class="font-bold text-xs text-slate-800">Historique des Commandes</h4>
+                            <button type="button" onclick="openNewOrderForm()" class="px-3 py-1.5 bg-oumy-green hover:bg-teal-800 text-white rounded-xl text-xs font-black flex items-center gap-1.5 active:scale-95 transition-transform"><i class="fa-solid fa-plus"></i> Nouvelle commande</button>
+                        </div>
                         <div class="flex items-center gap-2">
                             <label for="ordersSortOrder" class="text-[10px] font-bold text-slate-500">Trier :</label>
                             <select id="ordersSortOrder" onchange="renderAdminOrders()" class="px-2 py-1 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white">
@@ -3241,7 +3263,7 @@
                 qty: Number(item.qty)
             }));
             const invalidItem = items.some(item => !item.name || !Number.isFinite(item.price) || item.price < 0 || !Number.isFinite(item.qty) || item.qty <= 0);
-            if (!name || phone.length < 8 || phone.length > 25 || !address || address.length > 300) {
+            if (!name || phone.length < 8 || phone.length > 25 || address.length > 300) {
                 showToast("Vérifiez le nom, le téléphone (8 à 25 caractères) et l'adresse.");
                 return;
             }
@@ -3329,6 +3351,359 @@
             } catch (error) {
                 showToast("Impossible de supprimer la commande (règles à déployer ?).");
             }
+        }
+
+        // --- NOUVELLE COMMANDE SAISIE PAR LA FERME ---
+        const ORDER_SOURCES = { telephone: 'Téléphone', whatsapp: 'WhatsApp', place: 'Sur place' };
+        let newOrder = null;
+        let newOrderMatches = [];
+
+        function orderSourceLabel(source) {
+            return ORDER_SOURCES[source] || 'Site';
+        }
+
+        function clientPhoneKey(value) {
+            const digits = String(value || '').replace(/\D/g, '');
+            return digits.length === 12 && digits.startsWith('221') ? digits.slice(3) : digits;
+        }
+
+        function localDateTimeValue(date) {
+            const pad = number => String(number).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }
+
+        function newOrderTotals() {
+            const subtotal = newOrder.items.reduce((sum, item) => sum + Math.round((Number(item.price) || 0) * (Number(item.qty) || 0)), 0);
+            const fee = Math.max(0, Math.round(Number(newOrder.fee) || 0));
+            return { subtotal, fee, total: subtotal + fee };
+        }
+
+        function refreshNewOrderTotals() {
+            if (!newOrder) return;
+            newOrder.items.forEach((item, index) => {
+                const line = document.getElementById(`noLine-${index}`);
+                if (line) line.textContent = `${Math.round((Number(item.price) || 0) * (Number(item.qty) || 0)).toLocaleString('fr-FR')} FCFA`;
+            });
+            document.getElementById('noTotal').textContent = `${newOrderTotals().total.toLocaleString('fr-FR')} FCFA`;
+        }
+
+        function openNewOrderForm() {
+            if (!requireFirebaseAdmin()) return;
+            const zone = deliveryZones[0];
+            newOrder = {
+                customer: { name: '', phone: '', address: '', zone: zone ? zoneTextFor(zone) : '' },
+                zoneId: zone ? zone.id : '__other',
+                fee: zone ? zone.fee : 0,
+                source: 'telephone',
+                note: '',
+                items: [],
+                matched: null
+            };
+            newOrderMatches = [];
+            const zoneOptions = deliveryZones.map(item => `<option value="${escapeDeliveryHtml(item.id)}">${escapeDeliveryHtml(zoneTextFor(item))}</option>`).join('');
+            const inputClass = 'w-full px-2.5 py-2 rounded-lg border border-slate-300 outline-none focus:border-oumy-green bg-white';
+            document.getElementById('newOrderBody').innerHTML = `
+                <section class="space-y-2">
+                    <h4 class="font-black text-slate-800">1. La cliente</h4>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true"></i>
+                        <input type="search" id="noSearch" oninput="searchNewOrderCustomers()" autocomplete="off" placeholder="Chercher une cliente : téléphone, prénom ou nom" aria-label="Chercher une cliente" class="${inputClass} pl-9">
+                    </div>
+                    <div id="noSuggestions" class="hidden rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm"></div>
+                    <div id="noClientCard" class="hidden"></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="space-y-0.5"><span class="block text-[10px] font-bold text-slate-500">Nom et prénom *</span><input id="noName" maxlength="100" oninput="newOrder.customer.name = this.value" class="${inputClass}"></label>
+                        <label class="space-y-0.5"><span class="block text-[10px] font-bold text-slate-500">Téléphone *</span><input id="noPhone" type="tel" maxlength="25" oninput="newOrder.customer.phone = this.value" class="${inputClass}"></label>
+                    </div>
+                    <label class="space-y-0.5 block"><span class="block text-[10px] font-bold text-slate-500">Adresse de livraison</span><input id="noAddress" maxlength="300" oninput="newOrder.customer.address = this.value" class="${inputClass}"></label>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <label class="space-y-0.5 sm:col-span-2"><span class="block text-[10px] font-bold text-slate-500">Zone de livraison</span>
+                            <select id="noZone" onchange="onNewOrderZoneChange(this.value)" class="${inputClass}">${zoneOptions}<option value="__other">Autre / sans zone</option></select></label>
+                        <label class="space-y-0.5"><span class="block text-[10px] font-bold text-slate-500">Frais de livraison (FCFA)</span><input id="noFee" type="number" min="0" step="1" value="${newOrder.fee}" oninput="newOrder.fee = this.value; refreshNewOrderTotals()" class="${inputClass}"></label>
+                    </div>
+                </section>
+
+                <section class="space-y-2">
+                    <h4 class="font-black text-slate-800">2. Les produits</h4>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true"></i>
+                        <input type="search" id="noProductSearch" oninput="searchNewOrderProducts()" autocomplete="off" placeholder="Chercher un produit à ajouter (ex : crev, piment, ail)" aria-label="Chercher un produit" class="${inputClass} pl-9">
+                    </div>
+                    <div id="noProductResults" class="hidden rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm"></div>
+                    <div id="noLines" class="space-y-2"></div>
+                </section>
+
+                <section class="space-y-2">
+                    <h4 class="font-black text-slate-800">3. Détails de la commande</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="space-y-0.5"><span class="block text-[10px] font-bold text-slate-500">Origine</span>
+                            <select id="noSource" onchange="newOrder.source = this.value" class="${inputClass}">${Object.entries(ORDER_SOURCES).map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}</select></label>
+                        <label class="space-y-0.5"><span class="block text-[10px] font-bold text-slate-500">Date et heure de la commande</span>
+                            <input id="noDate" type="datetime-local" value="${localDateTimeValue(new Date())}" max="${localDateTimeValue(new Date())}" class="${inputClass}"></label>
+                    </div>
+                    <label class="space-y-0.5 block"><span class="block text-[10px] font-bold text-slate-500">Note interne (visible seulement dans l'admin)</span>
+                        <input id="noNote" maxlength="300" oninput="newOrder.note = this.value" placeholder="Ex : à livrer avant 10 h, appeler en arrivant" class="${inputClass}"></label>
+                </section>`;
+            renderNewOrderLines();
+            refreshNewOrderTotals();
+            document.getElementById('newOrderModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('noSearch')?.focus(), 50);
+        }
+
+        function closeNewOrderForm() {
+            newOrder = null;
+            document.getElementById('newOrderModal').classList.add('hidden');
+        }
+
+        // --- Recherche d'une cliente (téléphone, prénom ou nom) ---
+        function searchNewOrderCustomers() {
+            const box = document.getElementById('noSuggestions');
+            const terms = searchKey(document.getElementById('noSearch').value).split(/\s+/).filter(Boolean);
+            if (!terms.length) { box.classList.add('hidden'); newOrderMatches = []; return; }
+            newOrderMatches = buildCustomersFromOrders().filter(customer => {
+                const text = searchKey(`${customer.name} ${customer.phone}`);
+                const digits = clientPhoneKey(customer.phone);
+                return terms.every(term => text.includes(term) || (/^\d{3,}$/.test(term) && digits.includes(term.replace(/\D/g, ''))));
+            }).sort((a, b) => b.lastOrder - a.lastOrder).slice(0, 6);
+            box.classList.remove('hidden');
+            box.innerHTML = newOrderMatches.length
+                ? newOrderMatches.map((customer, index) => `
+                    <button type="button" onclick="pickNewOrderCustomer(${index})" class="w-full text-left px-3 py-2 border-t border-slate-100 first:border-t-0 hover:bg-emerald-50">
+                        <span class="block font-bold text-slate-900">${escapeDeliveryHtml(customer.name || 'Cliente')} <span class="font-normal text-slate-500">· ${escapeDeliveryHtml(customer.phone)}</span></span>
+                        <span class="block text-[10px] text-slate-500">${escapeDeliveryHtml(customer.address || 'Adresse non renseignée')} · ${customer.orderCount} commande${customer.orderCount > 1 ? 's' : ''}</span>
+                    </button>`).join('')
+                : `<p class="px-3 py-2 text-slate-500">Aucune cliente trouvée. Remplissez les champs ci-dessous pour une nouvelle cliente.</p>`;
+        }
+
+        function lastOrderOfCustomer(customer) {
+            const key = clientPhoneKey(customer.phone);
+            return activeOrders()
+                .filter(order => clientPhoneKey(order.customer?.phone) === key)
+                .sort((a, b) => (getOrderTimestamp(b) ?? 0) - (getOrderTimestamp(a) ?? 0))[0] || null;
+        }
+
+        function pickNewOrderCustomer(index) {
+            const customer = newOrderMatches[index];
+            if (!customer || !newOrder) return;
+            const zone = deliveryZones.find(item => item.name === customer.zone);
+            newOrder.customer.name = customer.name || '';
+            newOrder.customer.phone = customer.phone || '';
+            newOrder.customer.address = customer.address || '';
+            document.getElementById('noName').value = newOrder.customer.name;
+            document.getElementById('noPhone').value = newOrder.customer.phone;
+            document.getElementById('noAddress').value = newOrder.customer.address;
+            if (zone) {
+                document.getElementById('noZone').value = zone.id;
+                onNewOrderZoneChange(zone.id);
+            }
+            const last = lastOrderOfCustomer(customer);
+            newOrder.matched = last;
+            document.getElementById('noSuggestions').classList.add('hidden');
+            document.getElementById('noSearch').value = '';
+            const card = document.getElementById('noClientCard');
+            card.classList.remove('hidden');
+            card.innerHTML = `
+                <div class="rounded-xl border-2 border-emerald-300 bg-emerald-50 px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+                    <p class="text-[11px] font-bold text-emerald-900"><i class="fa-solid fa-circle-check"></i> Cliente retrouvée : ${escapeDeliveryHtml(customer.name || 'Cliente')} · ${customer.orderCount} commande${customer.orderCount > 1 ? 's' : ''}</p>
+                    ${last && last.items?.length ? `<button type="button" onclick="reuseLastOrderItems()" class="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold"><i class="fa-solid fa-rotate-right"></i> Reprendre sa dernière commande (${last.items.length} produit${last.items.length > 1 ? 's' : ''})</button>` : ''}
+                </div>`;
+        }
+
+        function reuseLastOrderItems() {
+            const last = newOrder?.matched;
+            if (!last) return;
+            if (newOrder.items.length && !confirm("Remplacer les produits déjà saisis par ceux de sa dernière commande ?")) return;
+            newOrder.items = last.items.filter(item => Number(item.qty) > 0).map(item => ({ id: item.id, name: item.name, category: item.category || '', price: item.price, unit: item.unit || 'unité', qty: Number(item.qty) }));
+            renderNewOrderLines();
+            refreshNewOrderTotals();
+        }
+
+        function onNewOrderZoneChange(zoneId) {
+            if (!newOrder) return;
+            newOrder.zoneId = zoneId;
+            const zone = deliveryZones.find(item => item.id === zoneId);
+            if (zone) {
+                newOrder.customer.zone = zoneTextFor(zone);
+                newOrder.fee = zone.fee;
+                document.getElementById('noFee').value = zone.fee;
+            } else {
+                newOrder.customer.zone = '';
+            }
+            refreshNewOrderTotals();
+        }
+
+        // --- Produits ---
+        function searchNewOrderProducts() {
+            const box = document.getElementById('noProductResults');
+            const terms = searchKey(document.getElementById('noProductSearch').value).split(/\s+/).filter(Boolean);
+            if (!terms.length) { box.classList.add('hidden'); return; }
+            const results = productsList.filter(product => terms.every(term => searchKey(product.name).includes(term)))
+                .sort((a, b) => a.name.localeCompare(b.name, 'fr')).slice(0, 8);
+            box.classList.remove('hidden');
+            box.innerHTML = results.length ? results.map(product => `
+                <button type="button" data-id="${escapeDeliveryHtml(product.id)}" onclick="addNewOrderProduct(this.dataset.id)" class="w-full text-left px-3 py-2 border-t border-slate-100 first:border-t-0 hover:bg-emerald-50 flex items-baseline justify-between gap-2">
+                    <span class="font-bold text-slate-900">${escapeDeliveryHtml(product.name)}${product.inStock === false ? ' <span class="text-rose-600 text-[10px]">(épuisé)</span>' : ''}</span>
+                    <span class="shrink-0 text-[10px] text-slate-500">${Number(product.price).toLocaleString('fr-FR')} FCFA / ${escapeDeliveryHtml(product.unit || 'unité')}</span>
+                </button>`).join('') : `<p class="px-3 py-2 text-slate-500">Aucun produit trouvé.</p>`;
+        }
+
+        function addNewOrderProduct(productId) {
+            if (!newOrder) return;
+            const product = productsList.find(item => item.id === productId);
+            if (!product) return;
+            const existing = newOrder.items.find(item => item.id === product.id);
+            if (existing) {
+                existing.qty = Math.round((Number(existing.qty) + cartStep(existing, 1)) * 8) / 8;
+            } else {
+                if (newOrder.items.length >= 50) { showToast("Maximum 50 produits par commande."); return; }
+                newOrder.items.push({ id: product.id, name: product.name, category: product.category || '', price: product.price, unit: product.unit || 'unité', qty: 1 });
+            }
+            document.getElementById('noProductSearch').value = '';
+            document.getElementById('noProductResults').classList.add('hidden');
+            renderNewOrderLines();
+            refreshNewOrderTotals();
+        }
+
+        function renderNewOrderLines() {
+            const container = document.getElementById('noLines');
+            if (!container || !newOrder) return;
+            if (!newOrder.items.length) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-4 border-2 border-dashed border-slate-200 rounded-xl">Aucun produit pour l'instant. Cherchez un produit ci-dessus.</p>`;
+                return;
+            }
+            container.innerHTML = newOrder.items.map((item, index) => {
+                const chips = isPortionProduct(item)
+                    ? `<div class="flex gap-1 mt-2" role="group" aria-label="Quantité de ${escapeDeliveryHtml(item.name)}">${PORTION_CHOICES.map(choice => `<button type="button" onclick="setNewOrderItemQty(${index}, ${choice.qty})" aria-pressed="${Number(item.qty) === choice.qty}" class="flex-1 py-1.5 rounded-lg text-[11px] font-bold border ${Number(item.qty) === choice.qty ? 'bg-amber-400 border-amber-400 text-slate-950' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">${choice.label}</button>`).join('')}</div>`
+                    : '';
+                return `
+                <div class="rounded-xl border-2 border-slate-200 bg-white p-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <p class="min-w-0 font-extrabold text-slate-900 break-words">${escapeDeliveryHtml(item.name)}</p>
+                        <span id="noLine-${index}" class="shrink-0 font-extrabold text-oumy-green">0 FCFA</span>
+                    </div>
+                    ${chips}
+                    <div class="flex items-center justify-between gap-2 mt-2 flex-wrap">
+                        <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">Prix / ${escapeDeliveryHtml(item.unit || 'unité')}
+                            <input type="number" min="0" step="1" value="${escapeDeliveryHtml(item.price)}" oninput="setNewOrderItemPrice(${index}, this.value)" aria-label="Prix unitaire" class="w-24 px-2 py-1 rounded-lg border border-slate-300 text-xs outline-none focus:border-oumy-green"></label>
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center border-2 border-slate-300 rounded-xl overflow-hidden bg-slate-50">
+                                <button type="button" onclick="stepNewOrderItem(${index}, -1)" aria-label="Diminuer" class="w-9 h-8 hover:bg-slate-200 text-slate-700 font-black">−</button>
+                                <span class="px-2 min-w-[4.2rem] text-center font-extrabold text-slate-900">${escapeDeliveryHtml(isHalfKiloVegetable(item) ? formatKgQuantity(item) : formatQuantity(item.qty))}</span>
+                                <button type="button" onclick="stepNewOrderItem(${index}, 1)" aria-label="Augmenter" class="w-9 h-8 hover:bg-slate-200 text-slate-700 font-black">+</button>
+                            </div>
+                            <button type="button" onclick="removeNewOrderItem(${index})" aria-label="Retirer ce produit" class="w-8 h-8 rounded-lg text-rose-600 hover:bg-rose-50"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            refreshNewOrderTotals();
+        }
+
+        function setNewOrderItemQty(index, qty) {
+            const item = newOrder?.items[index];
+            if (!item) return;
+            item.qty = Math.max(0.125, Math.min(1000, Math.round(Number(qty) * 8) / 8));
+            renderNewOrderLines();
+        }
+
+        function stepNewOrderItem(index, direction) {
+            const item = newOrder?.items[index];
+            if (!item) return;
+            const next = Math.round((Number(item.qty) + direction * cartStep(item, direction)) * 8) / 8;
+            if (next <= 0) { removeNewOrderItem(index); return; }
+            setNewOrderItemQty(index, next);
+        }
+
+        function setNewOrderItemPrice(index, value) {
+            const item = newOrder?.items[index];
+            if (!item) return;
+            item.price = Math.max(0, Number(value) || 0);
+            refreshNewOrderTotals();
+        }
+
+        function removeNewOrderItem(index) {
+            if (!newOrder) return;
+            newOrder.items.splice(index, 1);
+            renderNewOrderLines();
+        }
+
+        function buildOrderConfirmationMessage(order) {
+            const f = value => `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} FCFA`;
+            return [
+                `Bonjour ${whatsappSafe(order.customer.name)} 🌱`,
+                `Votre commande est bien enregistrée chez Oumy's Farm.`,
+                `🧾 *Réf :* ${order.id}`,
+                '',
+                '🛒 *Détail de la commande :*',
+                ...order.items.map(item => `- ${whatsappSafe(formatOrderItemQuantity(item))} ${whatsappSafe(item.name)} (${f(Math.round(item.price * item.qty))})`),
+                '',
+                `🚚 *Livraison :* ${order.fee > 0 ? f(order.fee) : 'Gratuite'}`,
+                `✅ *Total :* ${f(order.total)}`,
+                '',
+                'Merci de votre confiance !'
+            ].join('\n');
+        }
+
+        async function saveNewOrder(sendConfirmation) {
+            const draft = newOrder;
+            if (!draft || !requireFirebaseAdmin()) return;
+            const name = draft.customer.name.trim();
+            const phone = draft.customer.phone.trim();
+            const address = draft.customer.address.trim();
+            if (!name) { showToast("Indiquez le nom de la cliente."); return; }
+            if (phone.replace(/\D/g, '').length < 8 || phone.length > 25) { showToast("Indiquez un numéro de téléphone valide (8 chiffres au moins)."); return; }
+            if (!draft.items.length) { showToast("Ajoutez au moins un produit."); return; }
+            const items = draft.items.map(item => ({ id: String(item.id || ''), name: String(item.name || '').trim(), category: String(item.category || ''), price: Number(item.price), unit: String(item.unit || 'unité'), qty: Number(item.qty) }));
+            if (items.some(item => !item.name || !Number.isFinite(item.price) || item.price < 0 || !Number.isFinite(item.qty) || item.qty <= 0)) {
+                showToast("Vérifiez les produits : quantité et prix doivent être valides.");
+                return;
+            }
+            const { subtotal, fee, total } = newOrderTotals();
+            if (!address && fee > 0 && !confirm("Il n'y a pas d'adresse de livraison. Enregistrer quand même ?")) return;
+
+            const key = clientPhoneKey(phone);
+            const recent = ordersHistory.find(order => order.status !== 'cancelled' && clientPhoneKey(order.customer?.phone) === key && Date.now() - (getOrderTimestamp(order) ?? 0) < 2 * 3600 * 1000);
+            if (recent) {
+                const minutes = Math.max(1, Math.round((Date.now() - (getOrderTimestamp(recent) ?? 0)) / 60000));
+                if (!confirm(`Une commande de ce numéro a déjà été enregistrée il y a ${minutes} min (${recent.id}). Créer quand même une nouvelle commande ?`)) return;
+            }
+
+            let when = new Date(document.getElementById('noDate').value);
+            if (Number.isNaN(when.getTime()) || when.getTime() > Date.now()) when = new Date();
+            const backdated = Date.now() - when.getTime() > 120000;
+            const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(8)), byte => byte.toString(36).padStart(2, '0')).join('').slice(0, 10);
+            const order = {
+                id: `ORD-${Date.now()}-${randomPart}`,
+                date: when.toLocaleString('fr-FR'),
+                customer: { name, phone, address, zone: draft.customer.zone.slice(0, 200) },
+                items, subtotal, fee, total,
+                source: ORDER_SOURCES[draft.source] ? draft.source : 'telephone'
+            };
+            const note = draft.note.trim().slice(0, 300);
+            if (note) order.note = note;
+
+            const saveButtons = [document.getElementById('noSave'), document.getElementById('noSaveSend')];
+            saveButtons.forEach(button => { button.disabled = true; });
+            const whatsappBase = sendConfirmation ? customerWhatsAppUrl(phone) : '';
+            const whatsappWindow = sendConfirmation && whatsappBase ? window.open('about:blank', '_blank') : null;
+            try {
+                await cloudDb.collection('orders').doc(order.id).set({
+                    ...order,
+                    createdAt: backdated ? firebase.firestore.Timestamp.fromDate(when) : firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (error) {
+                if (whatsappWindow) whatsappWindow.close();
+                saveButtons.forEach(button => { button.disabled = false; });
+                showToast(error.code === 'permission-denied'
+                    ? "Enregistrement refusé : déployez les nouvelles règles et connectez-vous en admin."
+                    : "Commande non enregistrée. Vérifiez la connexion puis réessayez.");
+                return;
+            }
+            saveButtons.forEach(button => { button.disabled = false; });
+            if (sendConfirmation && !whatsappBase) showToast("Commande enregistrée. Numéro non valide pour WhatsApp : confirmation non envoyée.");
+            else showToast(sendConfirmation ? "Commande enregistrée. Envoyez la confirmation sur WhatsApp." : "Commande enregistrée.");
+            if (whatsappWindow) whatsappWindow.location.href = `${whatsappBase}?text=${encodeURIComponent(buildOrderConfirmationMessage(order))}`;
+            closeNewOrderForm();
         }
 
         // --- FACTURES ---
@@ -3742,6 +4117,24 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 zones: [...zones.entries()].sort((a, b) => b[1].count - a[1].count).map(([name, data]) => ({ name, ...data }))
             };
 
+            // Origine des commandes : le site, ou une commande saisie par la ferme (téléphone, WhatsApp, sur place).
+            const origins = new Map();
+            orders.forEach(order => {
+                const label = orderSourceLabel(order.source);
+                const current = origins.get(label) || { count: 0, revenue: 0 };
+                current.count += 1; current.revenue += Number(order.total) || 0;
+                origins.set(label, current);
+            });
+            const originSection = origins.size > 1 ? `
+                <section class="bg-white rounded-xl border border-slate-200 p-3 space-y-1">
+                    <h5 class="text-[10px] font-black uppercase tracking-wider text-slate-500 pb-1">Origine des commandes</h5>
+                    ${[...origins.entries()].sort((a, b) => b[1].count - a[1].count).map(([label, data]) => `
+                        <div class="flex items-center justify-between gap-2 py-1 border-b border-slate-100 last:border-0">
+                            <span class="text-slate-700">${escapeDeliveryHtml(label)}</span>
+                            <span class="shrink-0 text-[10px] text-slate-500">${data.count} commande${data.count > 1 ? 's' : ''} · <b class="text-oumy-green">${formatFcfa(data.revenue)}</b></span>
+                        </div>`).join('')}
+                </section>` : '';
+
             container.innerHTML = `
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     ${kpi('Commandes', orders.length)}
@@ -3768,6 +4161,8 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                             <div class="h-1.5 rounded bg-slate-100"><div class="h-1.5 rounded bg-amber-400" style="width:${Math.round(product.revenue / maxRevenue * 100)}%"></div></div>
                         </div>`).join('')}
                 </section>
+
+                ${originSection}
 
                 <section class="bg-white rounded-xl border border-slate-200 p-3 space-y-1">
                     <h5 class="text-[10px] font-black uppercase tracking-wider text-slate-500 pb-1">Zones de livraison</h5>
@@ -4507,11 +4902,13 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                             ${ord.updatedAt ? '<span class="bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Modifiée</span>' : ''}
                             ${ord.clientEditedAt ? '<span class="bg-sky-100 text-sky-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Modifiée par le client</span>' : ''}
                             ${ord.locked ? '<span class="bg-slate-200 text-slate-700 text-[9px] font-black uppercase px-1.5 py-0.5 rounded"><i class="fa-solid fa-lock"></i> Verrouillée</span>' : ''}
+                            ${ord.source ? `<span class="bg-violet-100 text-violet-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">${escapeDeliveryHtml(orderSourceLabel(ord.source))}</span>` : ''}
                             ${ord.invoiceNumber ? `<span class="bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">Facture ${escapeDeliveryHtml(ord.invoiceNumber)}</span>` : ''}
                         </div>
                         <p class="text-slate-500 text-[10px]">Date et heure : ${escapeDeliveryHtml(ord.date || 'Non renseignées')}</p>
                         <p class="text-slate-500 text-[10px]">📍 ${escapeDeliveryHtml(ord.customer.address)} | 📞 ${escapeDeliveryHtml(ord.customer.phone)}</p>
                         ${orderItemsListHtml(ord.items, true, ord.id)}
+                        ${ord.note ? `<p class="text-[11px] text-slate-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5"><b>Note :</b> ${escapeDeliveryHtml(ord.note)}</p>` : ''}
                         <div class="flex flex-wrap gap-1.5 pt-1">
                             <button type="button" data-id="${escapeDeliveryHtml(ord.id)}" onclick="openOrderEditor(this.dataset.id)" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100"><i class="fa-solid fa-pen"></i> Modifier</button>
                             ${ord.status === 'cancelled' ? `
@@ -4548,7 +4945,9 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 "Frais de livraison (FCFA)",
                 "Total commande (FCFA)",
                 "Statut",
-                "N° facture"
+                "N° facture",
+                "Origine",
+                "Note"
             ];
             const escapeCell = value => {
                 const text = String(value ?? '');
@@ -4580,7 +4979,9 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                     deliveryFee,
                     total,
                     order.status === 'cancelled' ? 'Annulée' : 'Active',
-                    order.invoiceNumber || ''
+                    order.invoiceNumber || '',
+                    orderSourceLabel(order.source),
+                    order.note || ''
                 ];
             });
             const csv = [headers, ...rows].map(row => row.map(escapeCell).join(';')).join('\r\n');
