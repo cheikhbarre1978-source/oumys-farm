@@ -4115,14 +4115,20 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             renderDailyPreparation();
         }
 
-        function resetPrepDay(dayKey) {
+        // Remet à zéro les cases de la sélection : produits cochés pour ces jours-là, et commandes de ces jours.
+        function resetPrepSelection() {
             const done = readPrepDone();
-            Object.keys(done).forEach(key => { if (key.startsWith(`${dayKey}|`)) delete done[key]; });
+            const days = [...selectedPreparationDays].sort();
+            const signature = days.join('+');
+            Object.keys(done).forEach(key => {
+                if (key.startsWith(`${signature}|p|`) || days.some(day => key.startsWith(`${day}|o|`))) delete done[key];
+            });
             try { localStorage.setItem(PREP_STORAGE_KEY, JSON.stringify(done)); } catch (error) { }
             renderDailyPreparation();
         }
 
-        let selectedPreparationDay = null;
+        let selectedPreparationDays = new Set(); // plusieurs jours peuvent être préparés ensemble
+        let preparationSelectionTouched = false;  // tant que personne n'a choisi, un jour est proposé par défaut
         let preparationWeekStart = null;
 
         function prepDayKey(date) {
@@ -4140,9 +4146,10 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             return monday;
         }
 
+        // Toucher un jour l'ajoute à la sélection ; le retoucher l'enlève.
         function selectPreparationDay(dayKey) {
-            selectedPreparationDay = dayKey;
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) preparationWeekStart = prepMondayOf(prepParseDayKey(dayKey));
+            preparationSelectionTouched = true;
+            if (selectedPreparationDays.has(dayKey)) selectedPreparationDays.delete(dayKey); else selectedPreparationDays.add(dayKey);
             renderDailyPreparation();
         }
 
@@ -4150,13 +4157,37 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             if (!preparationWeekStart) return;
             const next = new Date(preparationWeekStart);
             next.setDate(next.getDate() + delta * 7);
-            preparationWeekStart = next;
-            selectedPreparationDay = null; // le rendu choisit alors le jour utile de la nouvelle semaine
+            preparationWeekStart = next; // les jours déjà choisis restent choisis, même d'une semaine à l'autre
             renderDailyPreparation();
         }
 
         function goPreparationToday() {
-            selectPreparationDay(prepDayKey(new Date()));
+            preparationSelectionTouched = true;
+            const today = new Date();
+            selectedPreparationDays = new Set([prepDayKey(today)]);
+            preparationWeekStart = prepMondayOf(today);
+            renderDailyPreparation();
+        }
+
+        function selectPreparationWholeWeek() {
+            if (!preparationWeekStart) return;
+            preparationSelectionTouched = true;
+            const daysWithOrders = new Set(activeOrders().map(order => {
+                const timestamp = getOrderTimestamp(order);
+                return timestamp === null ? null : prepDayKey(new Date(timestamp));
+            }));
+            for (let index = 0; index < 7; index++) {
+                const date = new Date(preparationWeekStart);
+                date.setDate(date.getDate() + index);
+                if (daysWithOrders.has(prepDayKey(date))) selectedPreparationDays.add(prepDayKey(date));
+            }
+            renderDailyPreparation();
+        }
+
+        function clearPreparationDays() {
+            preparationSelectionTouched = true;
+            selectedPreparationDays = new Set();
+            renderDailyPreparation();
         }
 
         function renderDailyPreparation() {
@@ -4208,7 +4239,8 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             const todayKey = prepDayKey(new Date());
             const datedKeys = [...groups.keys()].filter(key => key !== 'unknown-date').sort();
             if (!preparationWeekStart) {
-                const start = selectedPreparationDay && /^\d{4}/.test(selectedPreparationDay) ? prepParseDayKey(selectedPreparationDay)
+                const firstSelected = [...selectedPreparationDays].filter(key => /^\d{4}/.test(key)).sort()[0];
+                const start = firstSelected ? prepParseDayKey(firstSelected)
                     : groups.has(todayKey) || !datedKeys.length ? new Date() : prepParseDayKey(datedKeys[datedKeys.length - 1]);
                 preparationWeekStart = prepMondayOf(start);
             }
@@ -4217,12 +4249,14 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 date.setDate(date.getDate() + index);
                 return { date, key: prepDayKey(date) };
             });
-            if (!selectedPreparationDay || (!groups.has(selectedPreparationDay) && !weekDays.some(day => day.key === selectedPreparationDay))) {
+            // On ne garde que les jours qui ont encore des commandes.
+            selectedPreparationDays = new Set([...selectedPreparationDays].filter(key => groups.has(key)));
+            if (!preparationSelectionTouched && !selectedPreparationDays.size) {
                 const withOrders = weekDays.filter(day => groups.has(day.key));
-                selectedPreparationDay = weekDays.some(day => day.key === todayKey) && groups.has(todayKey) ? todayKey
+                const defaultKey = weekDays.some(day => day.key === todayKey) && groups.has(todayKey) ? todayKey
                     : withOrders.length ? withOrders[withOrders.length - 1].key : null;
+                if (defaultKey) selectedPreparationDays.add(defaultKey);
             }
-            const group = groups.get(selectedPreparationDay);
 
             const currentMonday = prepMondayOf(new Date());
             const canGoNext = preparationWeekStart < currentMonday;
@@ -4234,17 +4268,17 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 ? `${frDay(preparationWeekStart)} au ${frDay(weekEnd)} ${frMonth(weekEnd)} ${weekEnd.getFullYear()}`
                 : `${frDay(preparationWeekStart)} ${frMonth(preparationWeekStart)} au ${frDay(weekEnd)} ${frMonth(weekEnd)} ${weekEnd.getFullYear()}`;
             const weekOrderCount = weekDays.reduce((sum, day) => sum + (groups.get(day.key)?.orders.length || 0), 0);
+            // ✓ sur un jour : toutes ses commandes sont cochées comme préparées.
             const isDayFullyPrepared = day => {
                 const dayGroup = groups.get(day.key);
-                if (!dayGroup || !dayGroup.products.size) return false;
-                return [...dayGroup.products.values()].every(product => isPrepDone(`${day.key}|p|${product.key}`));
+                return Boolean(dayGroup && dayGroup.orders.length && dayGroup.orders.every(order => isPrepDone(`${day.key}|o|${order.id}`)));
             };
 
             const arrowClass = enabled => `w-9 h-9 rounded-xl border-2 text-slate-700 font-black flex items-center justify-center ${enabled ? 'border-slate-300 bg-white hover:bg-slate-100' : 'border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'}`;
             const dayChips = weekDays.map(day => {
                 const dayGroup = groups.get(day.key);
                 const count = dayGroup ? dayGroup.orders.length : 0;
-                const active = day.key === selectedPreparationDay;
+                const active = selectedPreparationDays.has(day.key);
                 const isToday = day.key === todayKey;
                 const finished = isDayFullyPrepared(day);
                 const weekday = day.date.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
@@ -4271,15 +4305,43 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                     </div>
                     <button type="button" onclick="goPreparationToday()" class="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black active:scale-95 transition-transform">Aujourd'hui</button>
                 </div>
-                <div class="grid grid-cols-7 gap-1.5" role="group" aria-label="Choisir un jour de la semaine">${dayChips}</div>`;
+                <div class="grid grid-cols-7 gap-1.5" role="group" aria-label="Choisir un ou plusieurs jours">${dayChips}</div>
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <p class="text-[10px] text-slate-500">Touchez <b>un ou plusieurs jours</b> pour les préparer ensemble.</p>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="selectPreparationWholeWeek()" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100">Toute la semaine</button>
+                        <button type="button" onclick="clearPreparationDays()" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100">Effacer le choix</button>
+                    </div>
+                </div>`;
 
-            if (!group) {
-                container.innerHTML = `${weekNavHtml}<p class="text-center text-slate-400 py-8">Aucune commande cette semaine. Utilisez les flèches pour voir une autre semaine.</p>`;
+            const selectedKeys = [...selectedPreparationDays].sort();
+            const selectedGroups = selectedKeys.map(key => groups.get(key));
+            if (!selectedGroups.length) {
+                container.innerHTML = `${weekNavHtml}<p class="text-center text-slate-400 py-8">${weekOrderCount ? 'Touchez un ou plusieurs jours pour voir ce qu\'il faut préparer.' : 'Aucune commande cette semaine. Utilisez les flèches pour voir une autre semaine.'}</p>`;
                 return;
             }
+            const multi = selectedGroups.length > 1;
+            const signature = selectedKeys.join('+');
 
-            const products = [...group.products.values()];
-            const productDone = product => isPrepDone(`${group.dayKey}|p|${product.key}`);
+            // Produits : les quantités de tous les jours choisis sont additionnées.
+            const productTotals = new Map();
+            const allOrders = [];
+            selectedGroups.forEach(dayGroup => {
+                dayGroup.orders.forEach(order => allOrders.push({ order, dayKey: dayGroup.dayKey }));
+                dayGroup.products.forEach((product, key) => {
+                    const current = productTotals.get(key) || { key: product.key, name: product.name, unit: product.unit, category: product.category, quantity: 0 };
+                    current.quantity += product.quantity;
+                    productTotals.set(key, current);
+                });
+            });
+            allOrders.sort((first, second) => (getOrderTimestamp(first.order) ?? 0) - (getOrderTimestamp(second.order) ?? 0));
+            const bannerGroup = multi ? { dayKey: 'multi', label: `${selectedGroups.length} jours choisis` } : selectedGroups[0];
+            const chosenDaysLine = multi
+                ? `<p class="px-1 text-[11px] font-bold text-slate-600 capitalize">${selectedGroups.map(dayGroup => escapeDeliveryHtml(dayGroup.shortLabel)).join(' · ')}</p>`
+                : '';
+
+            const products = [...productTotals.values()];
+            const productDone = product => isPrepDone(`${signature}|p|${product.key}`);
             const doneProducts = products.filter(productDone).length;
 
             const categoryOrder = Object.keys(PREP_CATEGORY_LABELS);
@@ -4297,7 +4359,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                         ${list.sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(product => {
                             const done = productDone(product);
                             return `<label class="flex items-center gap-2 py-1.5 border-b border-slate-100 last:border-0 cursor-pointer ${done ? 'opacity-50' : ''}">
-                                <input type="checkbox" ${done ? 'checked' : ''} data-key="${escapeDeliveryHtml(`${group.dayKey}|p|${product.key}`)}" onchange="togglePrepDone(this.dataset.key)" class="w-4 h-4 accent-emerald-700 shrink-0">
+                                <input type="checkbox" ${done ? 'checked' : ''} data-key="${escapeDeliveryHtml(`${signature}|p|${product.key}`)}" onchange="togglePrepDone(this.dataset.key)" class="w-4 h-4 accent-emerald-700 shrink-0">
                                 <span class="min-w-0 truncate text-slate-700 ${done ? 'line-through' : ''}">${escapeDeliveryHtml(product.name)}</span>
                                 <span class="ml-auto shrink-0 font-extrabold text-oumy-green ${done ? 'line-through' : ''}">${formatQuantity(product.quantity)} ${escapeDeliveryHtml(product.unit)}</span>
                             </label>`;
@@ -4306,22 +4368,24 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
 
             // Commandes regroupées par zone de livraison (tournée)
             const byZone = new Map();
-            [...group.orders].reverse().forEach(ord => {
-                const zone = orderZoneName(ord);
+            allOrders.forEach(entry => {
+                const zone = orderZoneName(entry.order);
                 if (!byZone.has(zone)) byZone.set(zone, []);
-                byZone.get(zone).push(ord);
+                byZone.get(zone).push(entry);
             });
-            const doneOrders = group.orders.filter(ord => isPrepDone(`${group.dayKey}|o|${ord.id}`)).length;
+            const doneOrders = allOrders.filter(entry => isPrepDone(`${entry.dayKey}|o|${entry.order.id}`)).length;
             const orderRows = [...byZone.entries()].map(([zone, list]) => `
                 <div class="pt-2 first:pt-0">
                     <p class="text-[10px] font-black text-slate-500 bg-slate-100 rounded-md px-2 py-0.5 mb-1">🚚 ${escapeDeliveryHtml(zone)} · ${list.length} commande${list.length > 1 ? 's' : ''}</p>
-                    ${list.map(ord => {
-                        const done = isPrepDone(`${group.dayKey}|o|${ord.id}`);
+                    ${list.map(entry => {
+                        const ord = entry.order;
+                        const done = isPrepDone(`${entry.dayKey}|o|${ord.id}`);
                         const items = Array.isArray(ord.items) ? ord.items : [];
                         return `<label class="flex items-start gap-2 py-2 border-b border-slate-100 last:border-0 cursor-pointer ${done ? 'opacity-50' : ''}">
-                            <input type="checkbox" ${done ? 'checked' : ''} data-key="${escapeDeliveryHtml(`${group.dayKey}|o|${ord.id}`)}" onchange="togglePrepDone(this.dataset.key)" class="w-4 h-4 mt-0.5 accent-emerald-700 shrink-0">
+                            <input type="checkbox" ${done ? 'checked' : ''} data-key="${escapeDeliveryHtml(`${entry.dayKey}|o|${ord.id}`)}" onchange="togglePrepDone(this.dataset.key)" class="w-4 h-4 mt-0.5 accent-emerald-700 shrink-0">
                             <span class="min-w-0 space-y-0.5 ${done ? 'line-through' : ''}">
                                 <span class="block font-bold text-slate-800 break-words">${escapeDeliveryHtml(ord.customer?.name || 'Client')}</span>
+                                ${multi ? `<span class="block text-[10px] font-bold text-sky-700">Commandée ${escapeDeliveryHtml(groups.get(entry.dayKey)?.shortLabel || '')}</span>` : ''}
                                 <span class="block text-[10px] text-slate-500">📍 ${escapeDeliveryHtml(ord.customer?.address || '')} | 📞 ${escapeDeliveryHtml(ord.customer?.phone || '')}</span>
                                 <span class="block pt-1">${orderItemsListHtml(items)}</span>
                             </span>
@@ -4334,10 +4398,11 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             container.innerHTML = `
                 ${weekNavHtml}
                 <section class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-2 space-y-2">
-                    ${dayBannerHtml(group, `${group.orders.length} commande${group.orders.length > 1 ? 's' : ''}`)}
+                    ${dayBannerHtml(bannerGroup, `${allOrders.length} commande${allOrders.length > 1 ? 's' : ''}`)}
+                    ${chosenDaysLine}
                     <div class="bg-white rounded-xl border border-slate-200 px-3 py-2">
                         <div class="flex items-center justify-between pb-1">
-                            <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500">À préparer ce jour</h6>
+                            <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500">${multi ? `À préparer sur ces ${selectedGroups.length} jours` : 'À préparer ce jour'}</h6>
                             ${progress(doneProducts, products.length)}
                         </div>
                         ${productRows || '<p class="text-[10px] text-slate-400 py-2">Aucun article dans les commandes de cette journée.</p>'}
@@ -4345,12 +4410,12 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                     <div class="bg-white rounded-xl border border-slate-200 px-3 py-2">
                         <div class="flex items-center justify-between pb-1">
                             <h6 class="text-[10px] font-black uppercase tracking-wider text-slate-500">Commandes à livrer, par zone</h6>
-                            ${progress(doneOrders, group.orders.length)}
+                            ${progress(doneOrders, allOrders.length)}
                         </div>
                         ${orderRows}
                     </div>
                     <p class="text-[10px] text-slate-500 text-center px-2">Pour organiser une tournée de livraison (toutes dates confondues), utilisez l'onglet <b>🚚 Livraisons</b>.</p>
-                    <button type="button" onclick="resetPrepDay('${group.dayKey}')" class="w-full py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-800">Réinitialiser les cases de cette journée</button>
+                    <button type="button" onclick="resetPrepSelection()" class="w-full py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-800">Réinitialiser les cases de cette sélection</button>
                 </section>`;
         }
 
