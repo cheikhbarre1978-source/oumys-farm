@@ -597,6 +597,7 @@
                             <label for="statsPeriod" class="text-[10px] font-bold text-slate-500">Période :</label>
                             <select id="statsPeriod" onchange="renderAdminStats()" class="px-2 py-1 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white">
                                 <option value="7">7 derniers jours</option>
+                                <option value="15">15 derniers jours</option>
                                 <option value="30" selected>30 derniers jours</option>
                                 <option value="all">Depuis le début</option>
                             </select>
@@ -4137,7 +4138,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 </div>`;
 
             // Commandes par jour (30 derniers jours au plus)
-            const chartDays = period === '7' ? 7 : 30;
+            const chartDays = period === '7' ? 7 : period === '15' ? 15 : 30;
             const perDay = new Map();
             for (let i = chartDays - 1; i >= 0; i--) {
                 const day = new Date(startOfToday.getTime() - i * dayMs);
