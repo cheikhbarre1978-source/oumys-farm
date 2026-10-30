@@ -4006,8 +4006,11 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 ...stats.perDay.map(day => [day.date, day.count, day.revenue]),
                 [],
                 ['Produits vendus'],
-                ['Produit', 'Quantité', 'Unité', "Chiffre d'affaires (FCFA)"],
-                ...stats.products.map(product => [product.name, String(product.quantity).replace('.', ','), product.unit, product.revenue]),
+                ['Produit', 'Quantité', 'Unité', "Chiffre d'affaires (FCFA)", 'Commandes', 'Part des ventes (%)', 'Dernière vente'],
+                ...stats.products.map(product => [product.name, String(product.quantity).replace('.', ','), product.unit, product.revenue, product.orderCount, String(Math.round(product.share * 10) / 10).replace('.', ','), product.lastSold ? new Date(product.lastSold).toLocaleDateString('fr-FR') : '']),
+                [],
+                ['Produits sans vente sur la période'],
+                ...(stats.unsold.length ? stats.unsold.map(name => [name]) : [['Aucun']]),
                 [],
                 ['Zones de livraison'],
                 ['Zone', 'Commandes', "Chiffre d'affaires (FCFA)"],
@@ -4022,6 +4025,88 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
+        }
+
+        // --- STATISTIQUES : DÉTAIL PAR PRODUIT ---
+        const STATS_PRODUCT_SORTS = {
+            revenue: "Plus gros chiffre d'affaires",
+            quantity: 'Plus grosses quantités',
+            orders: 'Plus de commandes',
+            recent: 'Vendus récemment',
+            low: 'Moins vendus',
+            name: 'Nom (A–Z)'
+        };
+        let statsProductData = { rows: [], totalRevenue: 0, unsold: [] };
+        let statsProductView = { sort: 'revenue', category: 'all', search: '' };
+
+        function setStatsProductView(field, value) {
+            statsProductView[field] = value;
+            renderStatsProducts();
+        }
+
+        function formatStatQuantity(product) {
+            const unit = String(product.unit || 'unité');
+            if (unit.trim().toLowerCase() === 'kg' && product.quantity < 1) return `${Math.round(product.quantity * 1000)} g`;
+            return `${formatQuantity(product.quantity)} ${unit}`;
+        }
+
+        function statsCategoryLabel(category) {
+            return category === 'legumes' ? 'Légumes' : category === 'packs' ? 'Pack vert' : 'Autres';
+        }
+
+        function renderStatsProducts() {
+            const table = document.getElementById('statsProductTable');
+            const chipsBox = document.getElementById('statsProductChips');
+            if (!table || !chipsBox) return;
+            const { rows, totalRevenue, unsold } = statsProductData;
+            const view = statsProductView;
+            const formatFcfa = value => `${Math.round(value).toLocaleString('fr-FR')} FCFA`;
+            const categoryOf = product => (product.category === 'legumes' || product.category === 'packs') ? product.category : 'autres';
+
+            const categories = [...new Set([...rows, ...unsold].map(categoryOf))];
+            if (view.category !== 'all' && !categories.includes(view.category)) view.category = 'all';
+            chipsBox.innerHTML = categories.length > 1 ? ['all', ...categories].map(category => {
+                const active = view.category === category;
+                return `<button type="button" onclick="setStatsProductView('category', '${category}')" aria-pressed="${active}" class="px-3 py-1 rounded-full border-2 text-[11px] font-bold ${active ? 'bg-oumy-green border-oumy-green text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}">${category === 'all' ? 'Tous' : statsCategoryLabel(category)}</button>`;
+            }).join('') : '';
+
+            const terms = searchKey(view.search).split(/\s+/).filter(Boolean);
+            const matches = product => (view.category === 'all' || categoryOf(product) === view.category)
+                && terms.every(term => searchKey(product.name).includes(term));
+            const sorters = {
+                revenue: (a, b) => b.revenue - a.revenue,
+                quantity: (a, b) => b.quantity - a.quantity,
+                orders: (a, b) => b.orderCount - a.orderCount || b.revenue - a.revenue,
+                recent: (a, b) => b.lastSold - a.lastSold,
+                low: (a, b) => a.revenue - b.revenue,
+                name: (a, b) => a.name.localeCompare(b.name, 'fr')
+            };
+            const shown = rows.filter(matches).sort(sorters[view.sort] || sorters.revenue);
+            const maxShare = Math.max(1, ...shown.map(product => product.share));
+            const formatShare = value => `${value < 10 ? (Math.round(value * 10) / 10).toLocaleString('fr-FR') : Math.round(value)} %`;
+            const shownRevenue = shown.reduce((sum, product) => sum + product.revenue, 0);
+
+            const rowsHtml = shown.map(product => `
+                <div class="py-2 border-b border-slate-100 last:border-0 space-y-1">
+                    <div class="flex items-baseline justify-between gap-2">
+                        <span class="min-w-0 break-words font-bold text-slate-800">${escapeDeliveryHtml(product.name)}</span>
+                        <span class="shrink-0 font-extrabold text-oumy-green">${formatFcfa(product.revenue)}</span>
+                    </div>
+                    <div class="h-1.5 rounded bg-slate-100"><div class="h-1.5 rounded bg-amber-400" style="width:${Math.max(2, Math.round(product.share / maxShare * 100))}%"></div></div>
+                    <p class="text-[10px] text-slate-500">
+                        <b class="text-slate-700">${escapeDeliveryHtml(formatStatQuantity(product))}</b> vendus · ${product.orderCount} commande${product.orderCount > 1 ? 's' : ''} · ${formatShare(product.share)} des ventes${product.lastSold ? ` · dernière vente ${escapeDeliveryHtml(new Date(product.lastSold).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))}` : ''}
+                    </p>
+                </div>`).join('');
+
+            const unsoldShown = unsold.filter(matches).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+            table.innerHTML = `
+                <p class="text-[10px] font-semibold text-slate-500">${shown.length} produit${shown.length > 1 ? 's' : ''} vendu${shown.length > 1 ? 's' : ''}${shown.length ? ` · ${formatFcfa(shownRevenue)} de ventes` : ''}${shownRevenue !== totalRevenue ? ` (sur ${formatFcfa(totalRevenue)} au total)` : ''}</p>
+                ${rowsHtml || '<p class="text-center text-slate-400 py-4">Aucun produit vendu ne correspond.</p>'}
+                ${unsoldShown.length ? `
+                <details class="mt-1 rounded-xl border border-slate-200 bg-slate-50">
+                    <summary class="cursor-pointer select-none px-3 py-2 text-[11px] font-black text-slate-600">Sans aucune vente sur la période (${unsoldShown.length})</summary>
+                    <div class="flex flex-wrap gap-1.5 px-3 pb-3">${unsoldShown.map(product => `<span class="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[11px] text-slate-600">${escapeDeliveryHtml(product.name)}</span>`).join('')}</div>
+                </details>` : ''}`;
         }
 
         function renderAdminStats() {
@@ -4076,17 +4161,31 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
 
             // Produits les plus vendus
             const products = new Map();
-            orders.forEach(order => (Array.isArray(order.items) ? order.items : []).forEach(item => {
-                const quantity = Number(item.qty) || 0;
-                if (quantity <= 0) return;
-                const unit = item.unit || 'unité';
-                const key = `${item.id || item.name}::${unit}`;
-                const current = products.get(key) || { name: item.name || 'Article', unit, quantity: 0, revenue: 0 };
-                current.quantity += quantity;
-                current.revenue += Math.round((Number(item.price) || 0) * quantity);
-                products.set(key, current);
-            }));
+            const soldIds = new Set();
+            orders.forEach(order => {
+                const seenInOrder = new Set();
+                const orderTime = getOrderTimestamp(order) ?? 0;
+                (Array.isArray(order.items) ? order.items : []).forEach(item => {
+                    const quantity = Number(item.qty) || 0;
+                    if (quantity <= 0) return;
+                    const unit = item.unit || 'unité';
+                    const key = `${item.id || item.name}::${unit}`;
+                    const current = products.get(key) || { id: item.id || '', name: item.name || 'Article', unit, category: item.category || '', quantity: 0, revenue: 0, orderCount: 0, lastSold: 0 };
+                    current.quantity += quantity;
+                    current.revenue += Math.round((Number(item.price) || 0) * quantity);
+                    if (!seenInOrder.has(key)) { current.orderCount += 1; seenInOrder.add(key); }
+                    current.lastSold = Math.max(current.lastSold, orderTime);
+                    products.set(key, current);
+                    if (item.id) soldIds.add(item.id);
+                });
+            });
             const topProducts = [...products.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+            const productsRevenue = [...products.values()].reduce((sum, product) => sum + product.revenue, 0);
+            statsProductData = {
+                rows: [...products.values()].map(product => ({ ...product, share: productsRevenue ? product.revenue / productsRevenue * 100 : 0 })),
+                totalRevenue: productsRevenue,
+                unsold: productsList.filter(product => !soldIds.has(product.id)).map(product => ({ id: product.id, name: product.name, category: product.category || '' }))
+            };
             const maxRevenue = Math.max(1, ...topProducts.map(product => product.revenue));
 
             // Zones de livraison
@@ -4112,8 +4211,10 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 })),
                 products: [...products.values()].sort((a, b) => b.revenue - a.revenue).map(product => ({
                     ...product,
-                    quantity: Math.round(product.quantity * 1000) / 1000
+                    quantity: Math.round(product.quantity * 1000) / 1000,
+                    share: productsRevenue ? product.revenue / productsRevenue * 100 : 0
                 })),
+                unsold: statsProductData.unsold.map(product => product.name).sort((a, b) => a.localeCompare(b, 'fr')),
                 zones: [...zones.entries()].sort((a, b) => b[1].count - a[1].count).map(([name, data]) => ({ name, ...data }))
             };
 
@@ -4162,6 +4263,21 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                         </div>`).join('')}
                 </section>
 
+                <section class="bg-white rounded-xl border border-slate-200 p-3 space-y-2.5">
+                    <h5 class="text-[10px] font-black uppercase tracking-wider text-slate-500">Détail par produit</h5>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative flex-1 min-w-[160px]">
+                            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]" aria-hidden="true"></i>
+                            <input type="search" id="statsProductSearch" value="${escapeDeliveryHtml(statsProductView.search)}" oninput="setStatsProductView('search', this.value)" placeholder="Chercher un produit" aria-label="Chercher un produit" class="w-full text-xs pl-7 pr-2 py-1.5 rounded-lg border border-slate-300 outline-none focus:border-oumy-green">
+                        </div>
+                        <select id="statsProductSort" onchange="setStatsProductView('sort', this.value)" aria-label="Trier les produits" class="px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white">
+                            ${Object.entries(STATS_PRODUCT_SORTS).map(([value, label]) => `<option value="${value}" ${statsProductView.sort === value ? 'selected' : ''}>${label}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div id="statsProductChips" class="flex flex-wrap gap-1.5"></div>
+                    <div id="statsProductTable"></div>
+                </section>
+
                 ${originSection}
 
                 <section class="bg-white rounded-xl border border-slate-200 p-3 space-y-1">
@@ -4172,6 +4288,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                             <span class="shrink-0 text-[10px] text-slate-500">${data.count} commande${data.count > 1 ? 's' : ''} · <b class="text-oumy-green">${formatFcfa(data.revenue)}</b></span>
                         </div>`).join('')}
                 </section>`;
+            renderStatsProducts();
         }
 
         // --- LIVRAISONS : TOURNÉES COMPOSÉES À LA MAIN ---
