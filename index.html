@@ -3987,7 +3987,8 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             }
             const escapeCell = value => {
                 const text = String(value ?? '');
-                const safeText = /^[\t\r ]*[=+\-@]/.test(text) ? `'${text}` : text;
+                const isPlainNumber = /^-?\d+([\.,]\d+)?$/.test(text);
+                const safeText = !isPlainNumber && /^[\t\r ]*[=+\-@]/.test(text) ? `'${text}` : text;
                 return `"${safeText.replace(/"/g, '""')}"`;
             };
             const stats = lastStats;
@@ -4001,14 +4002,18 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 ["Chiffre d'affaires (FCFA)", stats.revenue],
                 ['Panier moyen (FCFA)', stats.averageBasket],
                 ['Clients différents', stats.customerCount],
+                ...(stats.comparable ? [
+                    ["Évolution des commandes vs période précédente (%)", stats.orderTrend === null ? '' : String(Math.round(stats.orderTrend * 10) / 10).replace('.', ',')],
+                    ["Évolution du chiffre d'affaires vs période précédente (%)", stats.revenueTrend === null ? '' : String(Math.round(stats.revenueTrend * 10) / 10).replace('.', ',')]
+                ] : []),
                 [],
                 ['Commandes par jour'],
                 ['Date', 'Commandes', "Chiffre d'affaires (FCFA)"],
                 ...stats.perDay.map(day => [day.date, day.count, day.revenue]),
                 [],
                 ['Produits vendus'],
-                ['Produit', 'Quantité', 'Unité', "Chiffre d'affaires (FCFA)", 'Commandes', 'Part des ventes (%)', 'Dernière vente'],
-                ...stats.products.map(product => [product.name, String(product.quantity).replace('.', ','), product.unit, product.revenue, product.orderCount, String(Math.round(product.share * 10) / 10).replace('.', ','), product.lastSold ? new Date(product.lastSold).toLocaleDateString('fr-FR') : '']),
+                ['Produit', 'Quantité', 'Unité', "Chiffre d'affaires (FCFA)", 'Commandes', 'Part des ventes (%)', 'Dernière vente', ...(stats.comparable ? ["Évolution du CA (%)", 'CA période précédente (FCFA)'] : [])],
+                ...stats.products.map(product => [product.name, String(product.quantity).replace('.', ','), product.unit, product.revenue, product.orderCount, String(Math.round(product.share * 10) / 10).replace('.', ','), product.lastSold ? new Date(product.lastSold).toLocaleDateString('fr-FR') : '', ...(stats.comparable ? [product.trend === null || product.trend === undefined ? (product.isNew ? 'Nouveau' : '') : String(Math.round(product.trend * 10) / 10).replace('.', ','), product.prevRevenue || 0] : [])]),
                 [],
                 ['Produits sans vente sur la période'],
                 ...(stats.unsold.length ? stats.unsold.map(name => [name]) : [['Aucun']]),
@@ -4035,8 +4040,29 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             orders: 'Plus de commandes',
             recent: 'Vendus récemment',
             low: 'Moins vendus',
+            rise: 'Plus forte progression',
+            fall: 'Plus forte baisse',
             name: 'Nom (A–Z)'
         };
+
+        // Évolution en pourcentage par rapport à la période précédente ; null s'il n'y avait rien avant.
+        function trendPercent(current, previous) {
+            return previous > 0 ? (current - previous) / previous * 100 : null;
+        }
+
+        function formatTrendValue(percent) {
+            const value = Math.abs(percent);
+            return value < 10 ? (Math.round(value * 10) / 10).toLocaleString('fr-FR') : Math.round(value).toLocaleString('fr-FR');
+        }
+
+        function trendBadgeHtml(percent, isNew = false, stopped = false) {
+            const base = 'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-black';
+            if (stopped) return `<span class="${base} bg-rose-100 text-rose-800">▼ Plus vendu (−100 %)</span>`;
+            if (isNew || percent === null || percent === undefined) return `<span class="${base} bg-sky-100 text-sky-800">${isNew ? 'Nouveau' : 'Pas de comparaison'}</span>`;
+            if (percent >= 1) return `<span class="${base} bg-emerald-100 text-emerald-800">▲ +${formatTrendValue(percent)} %</span>`;
+            if (percent <= -1) return `<span class="${base} bg-rose-100 text-rose-800">▼ −${formatTrendValue(percent)} %</span>`;
+            return `<span class="${base} bg-slate-100 text-slate-600">= Stable</span>`;
+        }
         let statsProductData = { rows: [], totalRevenue: 0, unsold: [] };
         let statsProductView = { sort: 'revenue', category: 'all', search: '' };
 
@@ -4059,7 +4085,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             const table = document.getElementById('statsProductTable');
             const chipsBox = document.getElementById('statsProductChips');
             if (!table || !chipsBox) return;
-            const { rows, totalRevenue, unsold } = statsProductData;
+            const { rows, totalRevenue, unsold, comparable, previousLabel } = statsProductData;
             const view = statsProductView;
             const formatFcfa = value => `${Math.round(value).toLocaleString('fr-FR')} FCFA`;
             const categoryOf = product => (product.category === 'legumes' || product.category === 'packs') ? product.category : 'autres';
@@ -4079,13 +4105,19 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 quantity: (a, b) => b.quantity - a.quantity,
                 orders: (a, b) => b.orderCount - a.orderCount || b.revenue - a.revenue,
                 recent: (a, b) => b.lastSold - a.lastSold,
+                rise: (a, b) => (b.trend ?? -Infinity) - (a.trend ?? -Infinity),
+                fall: (a, b) => (a.trend ?? Infinity) - (b.trend ?? Infinity),
                 low: (a, b) => a.revenue - b.revenue,
                 name: (a, b) => a.name.localeCompare(b.name, 'fr')
             };
-            const shown = rows.filter(matches).sort(sorters[view.sort] || sorters.revenue);
+            const sortKey = !comparable && ['rise', 'fall'].includes(view.sort) ? 'revenue' : view.sort;
+            const shown = rows.filter(matches).sort(sorters[sortKey] || sorters.revenue);
             const maxShare = Math.max(1, ...shown.map(product => product.share));
             const formatShare = value => `${value < 10 ? (Math.round(value * 10) / 10).toLocaleString('fr-FR') : Math.round(value)} %`;
             const shownRevenue = shown.reduce((sum, product) => sum + product.revenue, 0);
+            const rising = shown.filter(product => product.trend !== null && product.trend >= 1).length;
+            const falling = shown.filter(product => product.trend !== null && product.trend <= -1).length;
+            const brandNew = shown.filter(product => product.isNew).length;
 
             const rowsHtml = shown.map(product => `
                 <div class="py-2 border-b border-slate-100 last:border-0 space-y-1">
@@ -4094,14 +4126,20 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                         <span class="shrink-0 font-extrabold text-oumy-green">${formatFcfa(product.revenue)}</span>
                     </div>
                     <div class="h-1.5 rounded bg-slate-100"><div class="h-1.5 rounded bg-amber-400" style="width:${Math.max(2, Math.round(product.share / maxShare * 100))}%"></div></div>
-                    <p class="text-[10px] text-slate-500">
-                        <b class="text-slate-700">${escapeDeliveryHtml(formatStatQuantity(product))}</b> vendus · ${product.orderCount} commande${product.orderCount > 1 ? 's' : ''} · ${formatShare(product.share)} des ventes${product.lastSold ? ` · dernière vente ${escapeDeliveryHtml(new Date(product.lastSold).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))}` : ''}
+                    <p class="text-[10px] text-slate-500 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                        ${comparable ? trendBadgeHtml(product.trend, product.isNew, product.stopped) : ''}
+                        ${product.stopped
+                            ? `<span>Aucune vente sur la période · ${escapeDeliveryHtml(formatFcfa(product.prevRevenue))} sur les ${escapeDeliveryHtml(previousLabel)}</span>`
+                            : `<span><b class="text-slate-700">${escapeDeliveryHtml(formatStatQuantity(product))}</b> vendus · ${product.orderCount} commande${product.orderCount > 1 ? 's' : ''} · ${formatShare(product.share)} des ventes${product.lastSold ? ` · dernière vente ${escapeDeliveryHtml(new Date(product.lastSold).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))}` : ''}${comparable && !product.isNew ? ` · avant : ${escapeDeliveryHtml(formatFcfa(product.prevRevenue))}` : ''}</span>`}
                     </p>
                 </div>`).join('');
 
             const unsoldShown = unsold.filter(matches).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
             table.innerHTML = `
-                <p class="text-[10px] font-semibold text-slate-500">${shown.length} produit${shown.length > 1 ? 's' : ''} vendu${shown.length > 1 ? 's' : ''}${shown.length ? ` · ${formatFcfa(shownRevenue)} de ventes` : ''}${shownRevenue !== totalRevenue ? ` (sur ${formatFcfa(totalRevenue)} au total)` : ''}</p>
+                <p class="text-[10px] font-semibold text-slate-500">${shown.length} produit${shown.length > 1 ? 's' : ''}${shown.length ? ` · ${formatFcfa(shownRevenue)} de ventes` : ''}${shownRevenue !== totalRevenue ? ` (sur ${formatFcfa(totalRevenue)} au total)` : ''}</p>
+                ${comparable
+                    ? `<p class="text-[11px] text-slate-600">Comparé aux ${escapeDeliveryHtml(previousLabel)} : <b class="text-emerald-700">▲ ${rising} en hausse</b> · <b class="text-rose-700">▼ ${falling} en baisse</b> · <b class="text-sky-700">${brandNew} nouveau${brandNew > 1 ? 'x' : ''}</b></p>`
+                    : `<p class="text-[11px] text-slate-500">Choisissez 7, 15 ou 30 jours pour voir la progression de chaque produit.</p>`}
                 ${rowsHtml || '<p class="text-center text-slate-400 py-4">Aucun produit vendu ne correspond.</p>'}
                 ${unsoldShown.length ? `
                 <details class="mt-1 rounded-xl border border-slate-200 bg-slate-50">
@@ -4125,6 +4163,15 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 container.innerHTML = `<p class="text-center text-slate-400 py-6">Aucune commande sur cette période.</p>`;
                 return;
             }
+
+            // Comparaison avec la période précédente de même durée (impossible pour « Depuis le début »).
+            const periodDays = period === 'all' ? 0 : Number(period);
+            const comparable = periodDays > 0;
+            const previousLabel = `${periodDays} jours précédents`;
+            const previousOrders = comparable
+                ? activeOrders().filter(order => { const time = getOrderTimestamp(order) ?? 0; return time >= since - periodDays * dayMs && time < since; })
+                : [];
+            const previousRevenue = previousOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
 
             const formatFcfa = value => `${Math.round(value).toLocaleString('fr-FR')} FCFA`;
             const revenue = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
@@ -4182,10 +4229,44 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
             });
             const topProducts = [...products.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
             const productsRevenue = [...products.values()].reduce((sum, product) => sum + product.revenue, 0);
+            const previousProducts = new Map();
+            previousOrders.forEach(order => (Array.isArray(order.items) ? order.items : []).forEach(item => {
+                const quantity = Number(item.qty) || 0;
+                if (quantity <= 0) return;
+                const unit = item.unit || 'unité';
+                const key = `${item.id || item.name}::${unit}`;
+                const current = previousProducts.get(key) || { id: item.id || '', name: item.name || 'Article', unit, category: item.category || '', quantity: 0, revenue: 0 };
+                current.quantity += quantity;
+                current.revenue += Math.round((Number(item.price) || 0) * quantity);
+                previousProducts.set(key, current);
+            }));
+            const productRows = [];
+            products.forEach((product, key) => {
+                const previous = previousProducts.get(key);
+                const previousProductRevenue = previous ? previous.revenue : 0;
+                productRows.push({
+                    ...product,
+                    share: productsRevenue ? product.revenue / productsRevenue * 100 : 0,
+                    prevRevenue: previousProductRevenue,
+                    trend: comparable && previousProductRevenue > 0 ? (product.revenue - previousProductRevenue) / previousProductRevenue * 100 : null,
+                    isNew: comparable && !previous,
+                    stopped: false
+                });
+            });
+            if (comparable) {
+                // Produits vendus avant mais plus du tout sur la période : recul de 100 %.
+                previousProducts.forEach((previous, key) => {
+                    if (products.has(key)) return;
+                    productRows.push({ id: previous.id, name: previous.name, unit: previous.unit, category: previous.category, quantity: 0, revenue: 0, orderCount: 0, lastSold: 0, share: 0, prevRevenue: previous.revenue, trend: -100, isNew: false, stopped: true });
+                });
+            }
+            const previouslySoldIds = new Set([...previousProducts.values()].map(product => product.id).filter(Boolean));
             statsProductData = {
-                rows: [...products.values()].map(product => ({ ...product, share: productsRevenue ? product.revenue / productsRevenue * 100 : 0 })),
+                rows: productRows,
                 totalRevenue: productsRevenue,
-                unsold: productsList.filter(product => !soldIds.has(product.id)).map(product => ({ id: product.id, name: product.name, category: product.category || '' }))
+                comparable,
+                previousLabel,
+                unsold: productsList.filter(product => !soldIds.has(product.id) && !previouslySoldIds.has(product.id)).map(product => ({ id: product.id, name: product.name, category: product.category || '' }))
             };
             const maxRevenue = Math.max(1, ...topProducts.map(product => product.revenue));
 
@@ -4205,15 +4286,17 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                 revenue,
                 averageBasket: Math.round(revenue / orders.length),
                 customerCount: customers.size,
+                comparable,
+                orderTrend: trendPercent(orders.length, previousOrders.length),
+                revenueTrend: trendPercent(revenue, previousRevenue),
                 perDay: [...perDay.values()].map(entry => ({
                     date: entry.day.toLocaleDateString('fr-FR'),
                     count: entry.count,
                     revenue: entry.revenue
                 })),
-                products: [...products.values()].sort((a, b) => b.revenue - a.revenue).map(product => ({
+                products: productRows.slice().sort((a, b) => b.revenue - a.revenue).map(product => ({
                     ...product,
-                    quantity: Math.round(product.quantity * 1000) / 1000,
-                    share: productsRevenue ? product.revenue / productsRevenue * 100 : 0
+                    quantity: Math.round(product.quantity * 1000) / 1000
                 })),
                 unsold: statsProductData.unsold.map(product => product.name).sort((a, b) => a.localeCompare(b, 'fr')),
                 zones: [...zones.entries()].sort((a, b) => b[1].count - a[1].count).map(([name, data]) => ({ name, ...data }))
@@ -4245,6 +4328,9 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                     ${kpi("Aujourd'hui", `${todayCount} commande${todayCount > 1 ? 's' : ''}`)}
                 </div>
                 <p class="text-[10px] text-slate-500">${customers.size} client${customers.size > 1 ? 's' : ''} différent${customers.size > 1 ? 's' : ''} (selon le téléphone).</p>
+                ${comparable ? `<p class="text-[11px] text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-1">Par rapport aux ${periodDays} jours précédents :
+                    commandes ${trendBadgeHtml(trendPercent(orders.length, previousOrders.length), previousOrders.length === 0)}
+                    · chiffre d'affaires ${trendBadgeHtml(trendPercent(revenue, previousRevenue), previousRevenue === 0)}</p>` : ''}
 
                 <section class="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
                     <h5 class="text-[10px] font-black uppercase tracking-wider text-slate-500">Commandes par jour</h5>
@@ -4272,7 +4358,7 @@ ${lines.map(line => `<tr><td>${e(line.label)}</td><td class="r">${e(line.quantit
                             <input type="search" id="statsProductSearch" value="${escapeDeliveryHtml(statsProductView.search)}" oninput="setStatsProductView('search', this.value)" placeholder="Chercher un produit" aria-label="Chercher un produit" class="w-full text-xs pl-7 pr-2 py-1.5 rounded-lg border border-slate-300 outline-none focus:border-oumy-green">
                         </div>
                         <select id="statsProductSort" onchange="setStatsProductView('sort', this.value)" aria-label="Trier les produits" class="px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white">
-                            ${Object.entries(STATS_PRODUCT_SORTS).map(([value, label]) => `<option value="${value}" ${statsProductView.sort === value ? 'selected' : ''}>${label}</option>`).join('')}
+                            ${Object.entries(STATS_PRODUCT_SORTS).filter(([value]) => comparable || !['rise', 'fall'].includes(value)).map(([value, label]) => `<option value="${value}" ${statsProductView.sort === value ? 'selected' : ''}>${label}</option>`).join('')}
                         </select>
                     </div>
                     <div id="statsProductChips" class="flex flex-wrap gap-1.5"></div>
